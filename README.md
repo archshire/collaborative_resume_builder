@@ -339,14 +339,38 @@ The `collaborative_resume` project involves personal resume information. Users s
 
 ### Insights
 
-I built this because I noticed that a human being's capacity to do a task well increases significantly when they are allowed to focus on doing one task well.
+I built this project from a simple belief: **a person does better work when they are allowed to focus on one task well**.
 
-In the case of the `collaborative_resume` project, students are asked to interview their partner, listen carefully, take notes, evaluate the answers against the company context, and then write a resume that suits the role described in the project PDF. That is a lot to hold at once. My sense is that the project sometimes fails in execution not because the learning goal is weak, but because the workflow creates cognitive overload.
+In the `collaborative_resume` project, students are asked to do many things at once:
 
-When that happens, the real learning experience, which is in the interview process, can get dropped in favour of simply completing the visible deliverable: the resume. The student may rush toward the written output instead of staying present with the person in front of them.
+- interview their partner;
+- listen carefully;
+- take notes;
+- evaluate answers against the company context;
+- remember useful evidence;
+- write a resume that fits the role.
 
-My insight was to offload the tasks that AI is naturally good at to the AI: memory, transcription, information storage, connection-making, rephrasing, evidence checking, and draft generation. Those are exactly the things that can distract the interviewer from listening well.
+That creates **cognitive overload**. When the workflow becomes too heavy, students may stop engaging with the interview as a learning experience and focus only on finishing the resume.
 
-What I wanted to preserve is the one thing AI cannot replace: the human connection in a face-to-face interview process. If the app can handle the recording, transcription, resume drafting, evidence checking, and follow-up prompts, then the human being is freer to do the human task: ask, listen, notice, respond, and understand another person more deeply.
+The real learning is not only in the final resume. The real learning is in:
 
-In this way, the app is not meant to replace the learning experience of `collaborative_resume`. It is meant to protect it. The resume becomes the artifact, but the interaction remains the core of the project.
+- asking better questions;
+- listening to another person;
+- noticing what is missing;
+- clarifying vague claims;
+- understanding how experience becomes evidence.
+
+My insight was to **offload the mechanical and memory-heavy work to AI**:
+
+- recording;
+- transcription;
+- information storage;
+- evidence checking;
+- resume drafting;
+- follow-up question generation.
+
+This lets the human interviewer focus on what AI cannot replace: **human connection, attention, and judgment**.
+
+The app is therefore not meant to replace the `collaborative_resume` learning experience. It is meant to protect it.
+
+The resume is the artifact. **The conversation is the learning.**
