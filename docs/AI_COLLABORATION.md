@@ -52,7 +52,7 @@ The manner of building is deliberate: achieve clarity before build. AREN helped 
 
 | Stage | Details |
 | --- | --- |
-| Builder Intent | Build the first individual-use B1 project. |
+| Builder Intent | Build the first individual-use project prototype. |
 | AI Observation | The resume interview assistant is the clearest individual-use vertical slice. |
 | Emergent Insight | collaborative_resume_builder can prove Project Listen through one focused workflow. |
 | Engineering Decision | Start with the Resume Interview Assistant before the meeting intelligence app. |

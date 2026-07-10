@@ -337,25 +337,16 @@ The `collaborative_resume` project involves personal resume information. Users s
 
 ## Reflection
 
-### What worked
+### Insights
 
-- Starting with the workflow before automation made the product easier to understand.
-- Browser recording was enough to prove the interview-capture layer.
-- The local backend gave a clean place to protect API keys.
-- AI-generated feedback became more useful once it drove a follow-up interview pass.
+I built this because I noticed that a human being's capacity to do a task well increases significantly when they are allowed to focus on doing one task well.
 
-### What failed or changed
+In the case of the `collaborative_resume` project, students are asked to interview their partner, listen carefully, take notes, evaluate the answers against the company context, and then write a resume that suits the role described in the project PDF. That is a lot to hold at once. My sense is that the project sometimes fails in execution not because the learning goal is weak, but because the workflow creates cognitive overload.
 
-- The first keyword-based resume generator produced weak and sometimes incoherent output.
-- Treating skill percentages as calculated scores was misleading.
-- A one-pass interview flow did not fully solve the resume evidence problem.
-- Google login, Drive, and Docs automation were intentionally deferred.
+When that happens, the real learning experience, which is in the interview process, can get dropped in favour of simply completing the visible deliverable: the resume. The student may rush toward the written output instead of staying present with the person in front of them.
 
-### Rationale for current shape
+My insight was to offload the tasks that AI is naturally good at to the AI: memory, transcription, information storage, connection-making, rephrasing, evidence checking, and draft generation. Those are exactly the things that can distract the interviewer from listening well.
 
-The current app is designed to show a practical AI-assisted development prototype for the B1 Builders Programme:
+What I wanted to preserve is the one thing AI cannot replace: the human connection in a face-to-face interview process. If the app can handle the recording, transcription, resume drafting, evidence checking, and follow-up prompts, then the human being is freer to do the human task: ask, listen, notice, respond, and understand another person more deeply.
 
-- It has frontend and backend components.
-- It uses AI as a co-developer and as a runtime service.
-- It preserves a clear boundary between transcript evidence and AI interpretation.
-- It demonstrates iterative improvement from rough prototype to more responsible workflow.
+In this way, the app is not meant to replace the learning experience of `collaborative_resume`. It is meant to protect it. The resume becomes the artifact, but the interaction remains the core of the project.

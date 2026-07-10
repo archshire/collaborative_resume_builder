@@ -589,7 +589,7 @@ WHY to WHAT.
 
 The naming now carries the project intent plainly: this is a practical builder tool for the collaborative_resume experience, not merely a general interview-to-resume demo.
 
-### Session CJ-010 - Two-Part Interview Loop and B1 Documentation Alignment
+### Session CJ-010 - Two-Part Interview Loop and Repository Documentation Alignment
 
 ```yaml
 session_id: CJ-010
@@ -598,7 +598,7 @@ date: 2026-07-10
 participants:
   - Builder
   - Codex
-scope: Part 1/Part 2 workflow and B1 Builders README requirements
+scope: Part 1/Part 2 workflow and standalone README requirements
 ```
 
 #### Clarification Target
@@ -627,7 +627,7 @@ Part 2 - Follow-up questions
 -> final resume PDF export
 ```
 
-The collaborative_resume PDF clarified that the source school project requires mutual interviews, structured resume writing, peer review, PDF export, and privacy responsibility. The B1 Builders Programme PDF clarified that the repository README should explain the problem, outcome, demo flow, technology stack, AI collaboration, installation, usage, project structure, and reflection.
+The collaborative_resume PDF clarified that the source school project requires mutual interviews, structured resume writing, peer review, PDF export, and privacy responsibility. The repository README therefore needed to explain the problem, outcome, demo flow, technology stack, AI collaboration, installation, usage, project structure, and reflection clearly enough for the project to stand on its own.
 
 #### Ambiguity Severity
 
@@ -649,12 +649,12 @@ WHY to HOW to WHAT.
 - Part 2 recording requires an explicit "Ready to ask follow-up questions" action before recording.
 - Follow-up files are named with the applicant slug and `_follow_up`.
 - The final resume PDF export belongs to the Part 2 updated resume.
-- README documentation should be aligned with B1 Builders Programme expectations.
+- README documentation should be aligned with the standalone project story.
 
 #### Remaining Unresolved Issues
 
 - The Part 2 heading typo `quesions` has been corrected to `questions`.
-- Whether to add screenshots, GIFs, or video for final B1 submission.
+- Whether to add screenshots, GIFs, or video for final project presentation.
 - Whether final PDF formatting should become richer before broad student use.
 - Whether a deterministic evidence rubric should complement Gemini/OpenAI model judgment.
 
@@ -707,7 +707,7 @@ Tier 2 - Product identity and repository traceability.
 
 #### Prioritization Rationale
 
-The B1 submission and future project work should not require readers to mentally translate between an old working name and the current app purpose. Consistent naming makes the repository easier to inspect, explain, and continue.
+Future project work should not require readers to mentally translate between an old working name and the current app purpose. Consistent naming makes the repository easier to inspect, explain, and continue.
 
 #### Traversal Layer
 
@@ -762,7 +762,7 @@ Tier 3 - Implementation explanation and reviewer readiness.
 
 #### Prioritization Rationale
 
-B1 review requires the builder to explain what tools were used and why. A technical build document helps the builder describe the system confidently without mixing product philosophy, AI collaboration, and implementation mechanics into one overloaded README.
+The repository should help the builder explain what tools were used and why. A technical build document helps the builder describe the system confidently without mixing product philosophy, AI collaboration, and implementation mechanics into one overloaded README.
 
 #### Traversal Layer
 
@@ -800,7 +800,7 @@ The documentation set now has clearer separation of concerns: North Star explain
 | CRT-011 | CJ-009 | Rename for collaborative_resume identity | Tier 2 | Align product-facing name with the 42 collaborative resume project and intended student users. | Product identity | Builder clarified that the app exists as a solution to the collaborative_resume project. |
 | CRT-012 | CJ-010 | Split exercise into initial interview and follow-up interview | Tier 2 | Make missing-evidence feedback operational instead of decorative. | Interview workflow | Builder wanted the full exercise divided into Part 1 and Part 2. |
 | CRT-013 | CJ-010 | Move final PDF export to updated resume | Tier 3 | Ensure final exported artifact reflects follow-up evidence. | Artifact export | Builder clarified that the first resume should not be the final PDF export point. |
-| CRT-014 | CJ-010 | Align README with B1 Builders Programme PDF | Tier 3 | Prepare repository for project explanation and presentation expectations. | Documentation | Builder requested README completion according to B1 Builders Programme expectations. |
+| CRT-014 | CJ-010 | Align README with standalone project expectations | Tier 3 | Prepare repository for project explanation and presentation. | Documentation | Builder requested README completion so the project could be understood independently. |
 | CRT-015 | CJ-011 | Rename repository identity to `collaborative_resume_builder` | Tier 2 | Remove mismatch between old listening-oriented working name and current 42 project-facing identity. | Product identity, repository traceability | Builder requested relevant file and directory names be changed from `earfully_resume` to `collaborative_resume_builder`. |
 | CRT-016 | CJ-012 | Add technical build documentation | Tier 3 | Explain how the frontend, backend, audio APIs, AI providers, and export flow work together. | Technical documentation | Builder asked whether any documentation explains how the tech stack works. |
 
@@ -824,7 +824,7 @@ The documentation set now has clearer separation of concerns: North Star explain
 | RR-014 | Project-facing name is `collaborative_resume_builder`. | clarified | The name is boring but clear, and directly signals the app's role in the 42 collaborative resume project. | Builder clarification | LT-016 |
 | RR-015 | Follow-up questions should become a second recording/transcription loop. | clarified | Missing evidence is only useful if the app helps the interviewer collect it. | Builder clarification | LT-017, LT-019 |
 | RR-016 | PDF export belongs to the updated resume after follow-up. | clarified | The first resume is an interim draft; the final artifact should incorporate follow-up evidence. | Builder clarification | LT-021 |
-| RR-017 | README should follow B1 Builders Programme sections. | clarified | The programme assesses both the working prototype and the builder's ability to explain AI-assisted development. | B1 Builders Programme PDF / Builder request | LT-022 |
+| RR-017 | README should explain the project as a standalone artifact. | clarified | The repository should show both the working prototype and the builder's ability to explain AI-assisted development. | Builder request | LT-022 |
 | RR-018 | Canonical repository identity is `collaborative_resume_builder`. | clarified | Directory, package, and constitutional artifact names should match the current product purpose and reduce reviewer confusion. | Builder clarification | LT-023 |
 | RR-019 | Technical stack explanation belongs in `docs/TECHNICAL_BUILD.md`. | clarified | README and architecture should stay readable; detailed runtime mechanics need a focused document. | Builder request | LT-024 |
 
@@ -837,7 +837,7 @@ The documentation set now has clearer separation of concerns: North Star explain
 | DI-003 | Google login and Drive storage | Not required for first proof of product experience. | Later storage/export integration. | After v1 recorder and generation flow works. |  |
 | DI-004 | Backend architecture | Not required for local V1. | Later API and Google integration. | Before adding automated transcription or Drive/Docs output. |  |
 | DI-005 | Google Docs/Drive automation | Local PDF/download output is sufficient for the current prototype. | Later smoother collaborative_resume submission flow. | After local Part 1/Part 2 loop is reliable. |  |
-| DI-006 | Demo screenshots/video | README can describe the demo textually first. | B1 submission polish. | Before final repository submission or presentation. |  |
+| DI-006 | Demo screenshots/video | README can describe the demo textually first. | Project presentation polish. | Before final repository review or presentation. |  |
 
 ## Established Knowledge Changes
 
@@ -860,7 +860,7 @@ The documentation set now has clearer separation of concerns: North Star explain
 | EKC-015 | 2026-07-10 | EK-015 | added | The app now satisfies frontend/backend prototype shape locally. | CJ-010 | active |
 | EKC-016 | 2026-07-10 | EK-016 | added | Follow-up questions are operationalized as a second interview pass. | CJ-010 / RR-015 | active |
 | EKC-017 | 2026-07-10 | EK-017 | added | Final PDF export belongs after follow-up incorporation. | CJ-010 / RR-016 | active |
-| EKC-018 | 2026-07-10 | EK-018 | added | README should explain what the builder did and what AI did. | B1 Builders Programme PDF / CJ-010 | active |
+| EKC-018 | 2026-07-10 | EK-018 | added | README should explain what the builder did and what AI did. | CJ-010 | active |
 | EKC-019 | 2026-07-10 | EK-019 | added | Naming is now consistent across directory, package, docs, and constitutional artifacts. | CJ-011 / RR-018 | active |
 | EKC-020 | 2026-07-10 | EK-020 | added | Technical build documentation now separates implementation mechanics from conceptual architecture. | CJ-012 / RR-019 | active |
 
@@ -878,6 +878,6 @@ The documentation set now has clearer separation of concerns: North Star explain
 | TR-008 | CJ-008 | LT-015, EK-012 | Builder/Codex conversation | README now explains Gemini evidence evaluation and the limits of `evidenceStrength`. |
 | TR-009 | CJ-009 | LT-016, EK-013 | Builder/Codex conversation | Project-facing docs now use `collaborative_resume_builder` and its 42 Circle 6 description. |
 | TR-010 | CJ-010 | LT-017, LT-018, LT-019, LT-020, LT-021, EK-014, EK-016, EK-017 | Builder/Codex conversation, collaborative_resume PDF | Part 1/Part 2 workflow added to make follow-up evidence collection part of the app. |
-| TR-011 | CJ-010 | LT-022, EK-015, EK-018 | B1 Builders Programme PDF / Builder request | README aligned to B1 expected sections and AI-assisted development explanation. |
+| TR-011 | CJ-010 | LT-022, EK-015, EK-018 | Builder request | README aligned to standalone project explanation and AI-assisted development explanation. |
 | TR-012 | CJ-011 | LT-023, EK-019 | Builder/Codex conversation | Directory, package metadata, README tree, and KRYSTALIZE artifact filenames renamed to `collaborative_resume_builder`. |
 | TR-013 | CJ-012 | LT-024, EK-020 | Builder/Codex conversation | `docs/TECHNICAL_BUILD.md` added and linked from README/Architecture. |

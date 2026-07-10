@@ -144,7 +144,7 @@ The app is intentionally lightweight:
 - no cloud login;
 - no committed secrets.
 
-This keeps the prototype explainable for B1 review and easy to run locally.
+This keeps the prototype explainable for review and easy to run locally.
 
 ## Browser Audio Layer
 
@@ -510,7 +510,7 @@ The app does not yet use a PDF generation library.
 
 The prototype does not persist sessions to a database.
 
-This is intentional because the current B1 goal is to demonstrate a working AI-assisted prototype and explain the workflow clearly.
+This is intentional because the current goal is to demonstrate a working AI-assisted prototype and explain the workflow clearly.
 
 Local files are enough for the current flow:
 

@@ -129,7 +129,7 @@ The application should demonstrate responsible AI-assisted development while pre
 | LT-019 | Follow-up recording must be explicitly armed before recording. | Builder clarification | 2026-07-10 | If the user clicks record before the ready control, the app should tell them to click ready first. |
 | LT-020 | Follow-up audio files should be named `(applicant name)_follow_up.ogg` where the browser records OGG. | Builder clarification | 2026-07-10 | Multiple follow-up chunks may append an index. |
 | LT-021 | The updated Part 2 resume is the PDF export point. | Builder clarification | 2026-07-10 | The first resume is an interim artifact; the final PDF should come after follow-up evidence is incorporated. |
-| LT-022 | The README must satisfy the B1 Builders Programme expectations. | Builder request / B1 Builders Programme PDF | 2026-07-10 | It should explain problem, outcome, demo, stack, AI collaboration, installation, usage, structure, and reflection. |
+| LT-022 | The README must make the project understandable as a standalone artifact. | Builder request | 2026-07-10 | It should explain problem, outcome, demo, stack, AI collaboration, installation, usage, structure, and reflection. |
 | LT-023 | The canonical project directory, package name, and constitutional artifact names use `collaborative_resume_builder`. | Builder clarification | 2026-07-10 | This completes the move away from the early `earfully_resume` working name and aligns file identity with the 42 project being supported. |
 | LT-024 | The technical stack and runtime flow should be explained in `docs/TECHNICAL_BUILD.md`. | Builder request | 2026-07-10 | Product docs explain why the app exists; this document explains how browser, backend, audio APIs, AI providers, and export flow work together. |
 | LT-025 | Resume/profile generation must be blocked when the transcript lacks applicant evidence. | Builder correction | 2026-07-10 | A test-only transcript caused generic resume hallucination; the backend now returns an insufficient-evidence artifact before calling AI providers. |
@@ -154,11 +154,11 @@ The application should demonstrate responsible AI-assisted development while pre
 | EK-012 | Evidence evaluation needs plain builder-facing documentation. | The meaning and limits of `evidenceStrength` must be explicit so users do not confuse model judgment with validated candidate scoring. | Documentation, responsible AI | CJ-008 / RR-013 | active |
 | EK-013 | Naming should make the collaborative resume project immediately visible. | The tool is intended for 42 students working through the collaborative resume project, not as a generic resume generator. | Product identity, adoption | CJ-009 / RR-014 | active |
 | EK-014 | The collaborative_resume project requires mutual interview evidence, resume PDF output, review, and privacy responsibility. | The source project asks pairs to interview each other, write each other's resumes, export PDFs, and avoid publishing resumes that do not belong to them. | Product scope, UX, documentation | collaborative_resume PDF / CJ-010 | active |
-| EK-015 | The app now has frontend and backend components, matching the B1 Builders deliverable expectation. | Browser UI handles recording and artifacts; the local Node backend coordinates AI transcription/generation while keeping API keys server-side. | B1 submission readiness, architecture | B1 Builders Programme PDF / CJ-010 | active |
+| EK-015 | The app now has frontend and backend components. | Browser UI handles recording and artifacts; the local Node backend coordinates AI transcription/generation while keeping API keys server-side. | Repository readiness, architecture | CJ-010 | active |
 | EK-016 | Follow-up questions are part of the product, not merely output decoration. | Missing evidence should lead into a second interview pass so the resume can be strengthened responsibly. | Interview workflow, generation quality | CJ-010 / RR-015 | active |
 | EK-017 | PDF export belongs after follow-up incorporation. | A first-pass resume is useful for review, but the project output should reflect the improved final resume after follow-up questions. | Export, collaborative_resume alignment | CJ-010 / RR-016 | active |
-| EK-018 | Documentation should explain what the builder did and what AI did. | B1 Builders explicitly expects students to explain tools used, AI collaboration, prompts, review points, and decisions. | README, presentation readiness | B1 Builders Programme PDF / CJ-010 | active |
-| EK-019 | Naming should be consistent across product identity, directory, package metadata, and constitutional artifacts. | A reviewer should not have to reconcile `earfully_resume` paths with the current collaborative_resume-builder purpose. | Repository clarity, submission readiness | CJ-011 / RR-018 | active |
+| EK-018 | Documentation should explain what the builder did and what AI did. | The project should be understandable as a product and as an AI-assisted build process. | README, presentation readiness | CJ-010 | active |
+| EK-019 | Naming should be consistent across product identity, directory, package metadata, and constitutional artifacts. | A reviewer should not have to reconcile `earfully_resume` paths with the current collaborative_resume-builder purpose. | Repository clarity, review readiness | CJ-011 / RR-018 | active |
 | EK-020 | The technical build should be documented separately from product architecture. | The architecture doc stabilizes conceptual structure; the technical build doc explains implementation data flow, endpoints, APIs, and limits. | Documentation, reviewer readiness | CJ-012 / RR-019 | active |
 
 ## Dependency Map
@@ -169,7 +169,7 @@ The application should demonstrate responsible AI-assisted development while pre
 | DEP-002 | Google Doc output | Google OAuth and Docs/Drive API setup | Tier 3 | unresolved | no | Later-stage integration. |
 | DEP-003 | Resume generator quality | Transcript structure, applicant identity, fixed collaborative_resume job context, AI evidence-governed generation, and follow-up transcript | Tier 2 | in progress | yes | Part 2 now strengthens output by combining initial resume evidence with follow-up transcript evidence. |
 | DEP-004 | Cloud artifact storage | Resume/profile artifact formats and Google Drive/Docs API decisions | Tier 3 | deferred | no | V1 keeps local artifact downloads; cloud persistence remains later-stage. |
-| DEP-005 | B1 submission readiness | README completeness, repository structure, demo evidence, and reflection | Tier 3 | in progress | no | README is being aligned with the B1 Builders Programme PDF. |
+| DEP-005 | Repository readiness | README completeness, repository structure, demo evidence, and reflection | Tier 3 | in progress | no | README is being aligned with the standalone project story. |
 
 ## Unresolved Issues
 
@@ -187,7 +187,7 @@ The application should demonstrate responsible AI-assisted development while pre
 | AU-001 | Automated transcription reliability varies by provider, quota, and audio format. | Gemini/OpenAI can be wired locally, but real-world reliability depends on account quota, MIME support, and recording quality. | Transcription layer | Before presenting the tool as broadly reliable for all 42 students. |
 | AU-002 | Google Docs integration is not selected for MVP. | Resume can first render inside the web app. | Output layer | Before v2 Google integration. |
 | AU-003 | Skill profile evidence strength is model-assigned and unvalidated. | Gemini can judge transcript support, but this is not a deterministic formula or formal candidate assessment. | Skill profile scoring | Before using scores for any formal evaluation or matching decision. |
-| AU-004 | The current README can describe the workflow without screenshots yet. | The B1 PDF requests screenshots/GIF/video for demo; text documentation can be filled now and media can be added later. | B1 submission documentation | Before final B1 submission. |
+| AU-004 | The README can describe the workflow alongside screenshots. | Screenshots now show the major user flow; a video can be added later if needed. | Project documentation | Before external presentation. |
 
 ## Warning Registry
 
@@ -197,7 +197,7 @@ No active warnings.
 
 ### Active Clarification Question
 
-What exact final resume schema, PDF polish level, and skill-profile evidence rubric should be used before collaborative_resume_builder is treated as a submission-ready tool for many 42 students?
+What exact final resume schema, PDF polish level, and skill-profile evidence rubric should be used before collaborative_resume_builder is treated as a polished tool for many 42 students?
 
 ### Adjacent Unresolved Branches
 
@@ -205,8 +205,8 @@ What exact final resume schema, PDF polish level, and skill-profile evidence rub
 - Model-backed skill profile scoring and validation.
 - Automated transcription provider.
 - Google Docs export format.
-- Demo screenshots or video for B1 submission documentation.
+- Demo screenshots or video for project documentation.
 
 ## Suggested Next Reasoning Focus
 
-Test the complete Part 1 to Part 2 loop with real collaborative_resume interviews, then refine the final PDF output and README/demo evidence for B1 submission readiness.
+Test the complete Part 1 to Part 2 loop with real collaborative_resume interviews, then refine the final PDF output and README/demo evidence for broader review readiness.
