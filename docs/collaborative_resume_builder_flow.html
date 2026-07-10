@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>collaborative_resume_builder flow</title>
+    <style>
+      :root {
+        color: #17212b;
+        background: #f2f6fa;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+
+      main {
+        width: min(1160px, calc(100% - 28px));
+        margin: 0 auto;
+        padding: 34px 0 52px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: end;
+        margin-bottom: 16px;
+      }
+
+      h1 {
+        margin: 0;
+        color: #101827;
+        font-size: clamp(2.3rem, 6vw, 5rem);
+        line-height: 0.94;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        max-width: 860px;
+        margin: 12px 0 0;
+        color: #334155;
+        font-size: 1.05rem;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      button {
+        min-height: 38px;
+        border: 1px solid #bfd0e3;
+        border-radius: 8px;
+        background: #ffffff;
+        color: #17212b;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+        padding: 0 12px;
+      }
+
+      button:hover {
+        border-color: #7fa3c7;
+      }
+
+      .note {
+        margin: 0 0 16px;
+        border: 1px solid #bdd8f1;
+        border-left: 6px solid #0f9f9a;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #334155;
+        padding: 12px 14px;
+      }
+
+      .viewport {
+        height: min(82vh, 980px);
+        overflow: hidden;
+        border: 1px solid #cad8e8;
+        border-radius: 14px;
+        background: #fbfdff;
+        box-shadow: 0 18px 52px rgba(31, 41, 55, 0.12);
+        cursor: grab;
+        touch-action: none;
+      }
+
+      .viewport.is-panning {
+        cursor: grabbing;
+      }
+
+      svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        user-select: none;
+      }
+
+      .canvas-bg {
+        fill: #fbfdff;
+      }
+
+      .zone {
+        fill-opacity: 0.78;
+        stroke-width: 2;
+        rx: 18;
+      }
+
+      .zone-title {
+        fill: #17212b;
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .node rect,
+      .node polygon {
+        stroke-width: 2;
+        filter: drop-shadow(0 8px 16px rgba(31, 41, 55, 0.08));
+      }
+
+      .process rect {
+        fill: #eff7ff;
+        stroke: #9bc4ec;
+      }
+
+      .backend rect {
+        fill: #fff7cc;
+        stroke: #dbc56d;
+      }
+
+      .ai rect {
+        fill: #f2efff;
+        stroke: #b8acec;
+      }
+
+      .artifact rect {
+        fill: #ecfbf1;
+        stroke: #8dcaa2;
+      }
+
+      .fallback rect {
+        fill: #fff1df;
+        stroke: #e3a05f;
+      }
+
+      .decision polygon {
+        fill: #f4f0ff;
+        stroke: #aa9ce8;
+      }
+
+      .label,
+      .small-label {
+        fill: #17212b;
+        font-weight: 800;
+        text-anchor: middle;
+      }
+
+      .label {
+        font-size: 15px;
+      }
+
+      .small-label {
+        font-size: 13px;
+      }
+
+      .edge {
+        fill: none;
+        stroke: #607085;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+      }
+
+      .branch-label {
+        fill: #46566a;
+        font-size: 12px;
+        font-weight: 900;
+        text-anchor: middle;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 18px 0 0;
+      }
+
+      .legend span {
+        border: 1px solid #d8e5f4;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #334155;
+        font-size: 0.86rem;
+        font-weight: 800;
+        padding: 7px 10px;
+      }
+
+      .legend .process-key {
+        border-color: #9bc4ec;
+        background: #eff7ff;
+      }
+
+      .legend .decision-key {
+        border-color: #aa9ce8;
+        background: #f4f0ff;
+      }
+
+      .legend .backend-key {
+        border-color: #dbc56d;
+        background: #fff7cc;
+      }
+
+      .legend .ai-key {
+        border-color: #b8acec;
+        background: #f2efff;
+      }
+
+      .legend .artifact-key {
+        border-color: #8dcaa2;
+        background: #ecfbf1;
+      }
+
+      .legend .fallback-key {
+        border-color: #e3a05f;
+        background: #fff1df;
+      }
+
+      .footer {
+        margin: 18px 0 0;
+        color: #536173;
+        font-size: 0.92rem;
+      }
+
+      @media print {
+        main {
+          width: 100%;
+          padding: 0;
+        }
+
+        header,
+        .note,
+        .legend,
+        .footer,
+        .controls {
+          display: none;
+        }
+
+        .viewport {
+          height: auto;
+          overflow: visible;
+          border: 0;
+          box-shadow: none;
+          cursor: default;
+        }
+
+        svg {
+          height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>collaborative_resume_builder flow</h1>
+          <p class="subtitle">
+            A vertical rendering of the End-to-End Flow from <code>docs/TECHNICAL_BUILD.md</code>.
+            It follows the interview lifecycle from browser recording to backend transcription,
+            AI generation, follow-up interview, and final PDF export.
+          </p>
+        </div>
+        <div class="controls" aria-label="diagram controls">
+          <button type="button" id="zoom-in">Zoom In</button>
+          <button type="button" id="zoom-out">Zoom Out</button>
+          <button type="button" id="reset">Reset</button>
+        </div>
+      </header>
+
+      <p class="note">
+        The skill-profile percentages are AI evidence estimates, not hard-coded scores or
+        formal assessment measurements. The transcript evidence and gap notes should be
+        reviewed by the interviewer and applicant.
+      </p>
+
+      <section class="viewport" id="viewport" aria-label="vertical collaborative resume builder flow diagram">
+        <svg id="diagram" viewBox="0 0 1000 3150" role="img" aria-labelledby="diagram-title diagram-desc">
+          <title id="diagram-title">collaborative_resume_builder vertical flow</title>
+          <desc id="diagram-desc">
+            A vertical SVG flowchart matching the Mermaid flow in the Technical Build document.
+          </desc>
+          <defs>
+            <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+              <path d="M2,2 L10,6 L2,10 Z" fill="#607085"></path>
+            </marker>
+          </defs>
+
+          <g id="panzoom">
+            <rect class="canvas-bg" x="0" y="0" width="1000" height="3150"></rect>
+
+            <!-- Visual subsystem containers -->
+            <g id="backend-container">
+              <rect class="zone" x="135" y="1030" width="730" height="590" fill="#fff8d8" stroke="#e1cf79"></rect>
+              <text class="zone-title" x="500" y="1064" text-anchor="middle">Local Node backend</text>
+            </g>
+
+            <g id="ai-generation-container">
+              <rect class="zone" x="105" y="1835" width="790" height="305" fill="#f2efff" stroke="#b8acec"></rect>
+              <text class="zone-title" x="500" y="1869" text-anchor="middle">Gemini first, OpenAI fallback</text>
+            </g>
+
+            <!-- Connectors: frontend and browser flow -->
+            <g id="connectors-front" marker-end="url(#arrow)">
+              <path class="edge" d="M500 105 L500 135"></path>
+              <path class="edge" d="M500 195 L500 235"></path>
+              <path class="edge" d="M437 300 C330 300 300 355 300 405"></path>
+              <path class="edge" d="M500 365 L500 410"></path>
+              <path class="edge" d="M500 470 L500 510"></path>
+              <path class="edge" d="M500 570 L500 610"></path>
+              <path class="edge" d="M500 670 L500 710"></path>
+              <path class="edge" d="M500 770 L500 810"></path>
+              <path class="edge" d="M437 875 C300 875 260 940 260 1000"></path>
+              <path class="edge" d="M500 940 L500 980"></path>
+              <path class="edge" d="M500 1040 L500 1085"></path>
+            </g>
+
+            <!-- Connectors: backend fallback flow -->
+            <g id="connectors-backend" marker-end="url(#arrow)">
+              <path class="edge" d="M500 1145 L500 1180"></path>
+              <path class="edge" d="M437 1245 C315 1245 295 1290 295 1340"></path>
+              <path class="edge" d="M563 1245 C685 1245 705 1290 705 1340"></path>
+              <path class="edge" d="M295 1400 C295 1450 370 1480 440 1480"></path>
+              <path class="edge" d="M360 1370 C515 1370 555 1370 640 1370"></path>
+              <path class="edge" d="M705 1400 C705 1448 630 1480 560 1480"></path>
+              <path class="edge" d="M705 1400 C790 1435 800 1485 800 1530"></path>
+              <path class="edge" d="M800 1590 C800 1650 660 1665 560 1665"></path>
+              <path class="edge" d="M500 1510 L500 1635"></path>
+              <path class="edge" d="M500 1695 L500 1740"></path>
+            </g>
+
+            <!-- Connectors: artifact generation -->
+            <g id="connectors-generation" marker-end="url(#arrow)">
+              <path class="edge" d="M437 1805 C280 1805 260 1875 260 1925"></path>
+              <path class="edge" d="M563 1805 C720 1805 740 1875 740 1925"></path>
+              <path class="edge" d="M260 1985 L260 2030"></path>
+              <path class="edge" d="M740 1985 L740 2030"></path>
+              <path class="edge" d="M260 2090 L260 2160"></path>
+              <path class="edge" d="M740 2090 L740 2160"></path>
+              <path class="edge" d="M740 2220 C740 2285 610 2298 530 2298"></path>
+              <path class="edge" d="M500 2328 L500 2375"></path>
+              <path class="edge" d="M437 2440 C300 2440 275 2500 275 2550"></path>
+              <path class="edge" d="M500 2505 L500 2545"></path>
+              <path class="edge" d="M500 2605 L500 2645"></path>
+              <path class="edge" d="M500 2705 L500 2745"></path>
+              <path class="edge" d="M500 2815 L500 2855"></path>
+              <path class="edge" d="M500 2925 L500 2965"></path>
+              <path class="edge" d="M500 3035 L500 3075"></path>
+            </g>
+
+            <!-- Branch labels -->
+            <g id="branch-labels">
+              <text class="branch-label" x="360" y="305">No</text>
+              <text class="branch-label" x="530" y="392">Yes</text>
+              <text class="branch-label" x="340" y="895">Download</text>
+              <text class="branch-label" x="535" y="962">Transcribe</text>
+              <text class="branch-label" x="360" y="1260">Yes</text>
+              <text class="branch-label" x="640" y="1260">No</text>
+              <text class="branch-label" x="435" y="1354">Fail</text>
+              <text class="branch-label" x="340" y="1445">Success</text>
+              <text class="branch-label" x="640" y="1445">Success</text>
+              <text class="branch-label" x="778" y="1455">Fail</text>
+              <text class="branch-label" x="350" y="1824">Resume</text>
+              <text class="branch-label" x="650" y="1824">Skill Profile</text>
+              <text class="branch-label" x="360" y="2460">No</text>
+              <text class="branch-label" x="530" y="2525">Yes</text>
+            </g>
+
+            <!-- Nodes: top-level frontend flow -->
+            <g id="node-a" class="node process">
+              <rect x="350" y="45" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="70"><tspan x="500">Student opens</tspan><tspan x="500" dy="19">collaborative_resume_builder</tspan></text>
+            </g>
+
+            <g id="node-b" class="node process">
+              <rect x="390" y="135" width="220" height="60" rx="10"></rect>
+              <text class="label" x="500" y="171">Browser UI</text>
+            </g>
+
+            <g id="node-c" class="node decision">
+              <polygon points="500,235 620,300 500,365 380,300"></polygon>
+              <text class="small-label" x="500" y="294"><tspan x="500">Part 1 identity</tspan><tspan x="500" dy="17">fields filled?</tspan></text>
+            </g>
+
+            <g id="node-c1" class="node fallback">
+              <rect x="150" y="405" width="300" height="70" rx="10"></rect>
+              <text class="small-label" x="300" y="433"><tspan x="300">Show missing Recruiter</tspan><tspan x="300" dy="17">or Applicant message</tspan></text>
+            </g>
+
+            <g id="node-d" class="node process">
+              <rect x="350" y="410" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="446">Request microphone permission</text>
+            </g>
+
+            <g id="node-e" class="node process">
+              <rect x="350" y="510" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="535"><tspan x="500">Check mic with Web Audio</tspan><tspan x="500" dy="19">API</tspan></text>
+            </g>
+
+            <g id="node-f" class="node process">
+              <rect x="350" y="610" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="635"><tspan x="500">Record interview with</tspan><tspan x="500" dy="19">MediaRecorder</tspan></text>
+            </g>
+
+            <g id="node-g" class="node process">
+              <rect x="350" y="710" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="735"><tspan x="500">Create audio Blob and</tspan><tspan x="500" dy="19">local object URL</tspan></text>
+            </g>
+
+            <g id="node-h" class="node decision">
+              <polygon points="500,810 620,875 500,940 380,875"></polygon>
+              <text class="small-label" x="500" y="881">User action</text>
+            </g>
+
+            <g id="node-h1" class="node artifact">
+              <rect x="110" y="1000" width="300" height="60" rx="10"></rect>
+              <text class="label" x="260" y="1036">Save audio locally</text>
+            </g>
+
+            <g id="node-i" class="node process">
+              <rect x="350" y="980" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="1005"><tspan x="500">Convert Blob to base64</tspan></text>
+            </g>
+
+            <!-- Nodes: Local Node backend -->
+            <g id="node-j" class="node backend">
+              <rect x="350" y="1085" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="1121">POST /api/transcribe</text>
+            </g>
+
+            <g id="node-k" class="node decision">
+              <polygon points="500,1180 620,1245 500,1310 380,1245"></polygon>
+              <text class="small-label" x="500" y="1239"><tspan x="500">Gemini</tspan><tspan x="500" dy="17">available?</tspan></text>
+            </g>
+
+            <g id="node-l" class="node backend">
+              <rect x="145" y="1340" width="300" height="60" rx="10"></rect>
+              <text class="label" x="295" y="1365"><tspan x="295">Try Gemini</tspan><tspan x="295" dy="19">transcription</tspan></text>
+            </g>
+
+            <g id="node-m" class="node backend">
+              <rect x="555" y="1340" width="300" height="60" rx="10"></rect>
+              <text class="label" x="705" y="1365"><tspan x="705">Try OpenAI</tspan><tspan x="705" dy="19">transcription</tspan></text>
+            </g>
+
+            <g id="node-n" class="node backend">
+              <rect x="350" y="1450" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="1475"><tspan x="500">Format speaker-labelled</tspan><tspan x="500" dy="19">transcript</tspan></text>
+            </g>
+
+            <g id="node-o" class="node fallback">
+              <rect x="650" y="1530" width="300" height="60" rx="10"></rect>
+              <text class="label" x="800" y="1555"><tspan x="800">Return provider</tspan><tspan x="800" dy="19">error details</tspan></text>
+            </g>
+
+            <g id="node-p" class="node fallback">
+              <rect x="650" y="1650" width="300" height="60" rx="10"></rect>
+              <text class="label" x="800" y="1675"><tspan x="800">Show manual</tspan><tspan x="800" dy="19">transcription fallback</tspan></text>
+            </g>
+
+            <g id="node-q" class="node process">
+              <rect x="300" y="1635" width="400" height="60" rx="10"></rect>
+              <text class="label" x="500" y="1660"><tspan x="500">Insert transcript into editable</tspan><tspan x="500" dy="19">transcript box</tspan></text>
+            </g>
+
+            <g id="node-r" class="node decision">
+              <polygon points="500,1740 620,1805 500,1870 380,1805"></polygon>
+              <text class="small-label" x="500" y="1799"><tspan x="500">Generate</tspan><tspan x="500" dy="17">artifact</tspan></text>
+            </g>
+
+            <!-- Nodes: AI generation -->
+            <g id="node-s" class="node ai">
+              <rect x="80" y="1925" width="360" height="60" rx="10"></rect>
+              <text class="label" x="260" y="1950"><tspan x="260">POST /api/generate-artifacts</tspan><tspan x="260" dy="19">mode=resume</tspan></text>
+            </g>
+
+            <g id="node-t" class="node ai">
+              <rect x="560" y="1925" width="360" height="60" rx="10"></rect>
+              <text class="label" x="740" y="1950"><tspan x="740">POST /api/generate-artifacts</tspan><tspan x="740" dy="19">mode=profile</tspan></text>
+            </g>
+
+            <g id="node-u" class="node ai">
+              <rect x="80" y="2030" width="360" height="60" rx="10"></rect>
+              <text class="label" x="260" y="2055"><tspan x="260">Generate evidence-based</tspan><tspan x="260" dy="19">resume JSON</tspan></text>
+            </g>
+
+            <g id="node-v" class="node ai">
+              <rect x="560" y="2030" width="360" height="60" rx="10"></rect>
+              <text class="label" x="740" y="2055"><tspan x="740">Generate profile, feedback,</tspan><tspan x="740" dy="19">follow-up questions JSON</tspan></text>
+            </g>
+
+            <!-- Nodes: outputs and Part 2 -->
+            <g id="node-w" class="node artifact">
+              <rect x="80" y="2160" width="360" height="60" rx="10"></rect>
+              <text class="label" x="260" y="2196">Render initial resume</text>
+            </g>
+
+            <g id="node-x" class="node artifact">
+              <rect x="560" y="2160" width="360" height="60" rx="10"></rect>
+              <text class="label" x="740" y="2185"><tspan x="740">Render skill profile and</tspan><tspan x="740" dy="19">interview feedback</tspan></text>
+            </g>
+
+            <g id="node-y" class="node process">
+              <rect x="325" y="2268" width="350" height="60" rx="10"></rect>
+              <text class="label" x="500" y="2304">Review follow-up questions</text>
+            </g>
+
+            <g id="node-z" class="node decision">
+              <polygon points="500,2375 620,2440 500,2505 380,2440"></polygon>
+              <text class="small-label" x="500" y="2434"><tspan x="500">Part 2 ready</tspan><tspan x="500" dy="17">clicked?</tspan></text>
+            </g>
+
+            <g id="node-z1" class="node fallback">
+              <rect x="125" y="2550" width="300" height="60" rx="10"></rect>
+              <text class="label" x="275" y="2575"><tspan x="275">Block follow-up</tspan><tspan x="275" dy="19">recording</tspan></text>
+            </g>
+
+            <g id="node-aa" class="node process">
+              <rect x="350" y="2545" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="2581">Record follow-up audio</text>
+            </g>
+
+            <g id="node-ab" class="node process">
+              <rect x="350" y="2645" width="300" height="60" rx="10"></rect>
+              <text class="label" x="500" y="2681">Transcribe follow-up audio</text>
+            </g>
+
+            <g id="node-ac" class="node process">
+              <rect x="270" y="2745" width="460" height="70" rx="10"></rect>
+              <text class="label" x="500" y="2773"><tspan x="500">Combine initial transcript, first resume,</tspan><tspan x="500" dy="19">and follow-up transcript</tspan></text>
+            </g>
+
+            <g id="node-ad" class="node ai">
+              <rect x="350" y="2855" width="300" height="70" rx="10"></rect>
+              <text class="label" x="500" y="2883"><tspan x="500">Re-generate updated</tspan><tspan x="500" dy="19">resume</tspan></text>
+            </g>
+
+            <g id="node-ae" class="node ai">
+              <rect x="350" y="2965" width="300" height="70" rx="10"></rect>
+              <text class="label" x="500" y="2993"><tspan x="500">Re-generate updated</tspan><tspan x="500" dy="19">skill profile</tspan></text>
+            </g>
+
+            <g id="node-af" class="node artifact">
+              <rect x="270" y="3075" width="460" height="60" rx="10"></rect>
+              <text class="label" x="500" y="3100"><tspan x="500">Save final resume through browser</tspan><tspan x="500" dy="19">print-to-PDF</tspan></text>
+            </g>
+          </g>
+        </svg>
+      </section>
+
+      <div class="legend" aria-label="legend">
+        <span class="process-key">Process</span>
+        <span class="decision-key">Decision</span>
+        <span class="backend-key">Local backend</span>
+        <span class="ai-key">AI generation/API path</span>
+        <span class="artifact-key">Generated artifact/export</span>
+        <span class="fallback-key">Fallback/error</span>
+      </div>
+
+      <p class="footer">
+        This page intentionally mirrors the Mermaid flow in <code>docs/TECHNICAL_BUILD.md</code>.
+        The Markdown document remains the source of truth for the technical architecture.
+      </p>
+    </main>
+
+    <script>
+      const viewport = document.getElementById("viewport");
+      const panzoom = document.getElementById("panzoom");
+      const zoomIn = document.getElementById("zoom-in");
+      const zoomOut = document.getElementById("zoom-out");
+      const reset = document.getElementById("reset");
+
+      const state = {
+        scale: 1,
+        x: 0,
+        y: 0,
+        isPanning: false,
+        startX: 0,
+        startY: 0,
+        originX: 0,
+        originY: 0,
+      };
+
+      function render() {
+        panzoom.setAttribute("transform", `translate(${state.x} ${state.y}) scale(${state.scale})`);
+      }
+
+      function zoom(delta) {
+        state.scale = Math.min(2.8, Math.max(0.45, state.scale + delta));
+        render();
+      }
+
+      zoomIn.addEventListener("click", () => zoom(0.12));
+      zoomOut.addEventListener("click", () => zoom(-0.12));
+      reset.addEventListener("click", () => {
+        state.scale = 1;
+        state.x = 0;
+        state.y = 0;
+        render();
+      });
+
+      viewport.addEventListener("pointerdown", (event) => {
+        state.isPanning = true;
+        state.startX = event.clientX;
+        state.startY = event.clientY;
+        state.originX = state.x;
+        state.originY = state.y;
+        viewport.classList.add("is-panning");
+        viewport.setPointerCapture(event.pointerId);
+      });
+
+      viewport.addEventListener("pointermove", (event) => {
+        if (!state.isPanning) return;
+        state.x = state.originX + (event.clientX - state.startX);
+        state.y = state.originY + (event.clientY - state.startY);
+        render();
+      });
+
+      viewport.addEventListener("pointerup", (event) => {
+        state.isPanning = false;
+        viewport.classList.remove("is-panning");
+        viewport.releasePointerCapture(event.pointerId);
+      });
+
+      viewport.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        zoom(event.deltaY > 0 ? -0.08 : 0.08);
+      }, { passive: false });
+    </script>
+  </body>
+</html>

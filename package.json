@@ -1,0 +1,18 @@
+{
+  "name": "collaborative_resume_builder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-assisted resume interview assistant prototype.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "serve": "node server/index.cjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "4.9.5",
+    "vite": "2.9.16"
+  }
+}
