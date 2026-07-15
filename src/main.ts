@@ -1968,15 +1968,19 @@ function inferMimeType(fileName: string): string {
 }
 
 function updateGeneratorState(): void {
-  const hasTranscript = transcript.value.trim().length > 40;
+  const hasInitialEvidence = hasEnoughInitialApplicantEvidence();
   const hasFollowupTranscript = followupTranscript.value.trim().length > 40;
-  generateResumeButton.disabled = !hasTranscript;
-  generateProfileButton.disabled = !hasTranscript;
-  generateCandidateProfileButton.disabled = !hasTranscript;
-  regenerateResumeButton.disabled = !hasTranscript || !hasFollowupTranscript;
+  generateResumeButton.disabled = !hasInitialEvidence;
+  generateProfileButton.disabled = !hasInitialEvidence;
+  generateCandidateProfileButton.disabled = !hasInitialEvidence;
+  regenerateResumeButton.disabled = !hasInitialEvidence || !hasFollowupTranscript;
   regenerateProfileButton.disabled = !lastUpdatedResumeMarkdown.trim();
-  regenerateCandidateProfileButton.disabled = !hasTranscript || !hasFollowupTranscript;
+  regenerateCandidateProfileButton.disabled = !hasInitialEvidence || !hasFollowupTranscript;
   updateExportState();
+}
+
+function hasEnoughInitialApplicantEvidence(): boolean {
+  return transcript.value.trim().length > 40 || collectApplicantDirectInfo().length > 40;
 }
 
 function updateExportState(): void {
@@ -2008,7 +2012,7 @@ function startNewSession(): void {
 
 async function generateArtifacts(mode: GenerationMode): Promise<void> {
   const rawTranscript = transcript.value.trim();
-  if (rawTranscript.length <= 40) {
+  if (!hasEnoughInitialApplicantEvidence()) {
     return;
   }
   const applicantEvidence = buildApplicantEvidence(rawTranscript);
@@ -2139,7 +2143,7 @@ function renderAiArtifacts(artifacts: AiArtifacts, mode: GenerationMode): void {
 async function regenerateResume(): Promise<void> {
   const initialTranscript = transcript.value.trim();
   const followupText = followupTranscript.value.trim();
-  if (initialTranscript.length <= 40 || followupText.length <= 40) {
+  if (!hasEnoughInitialApplicantEvidence() || followupText.length <= 40) {
     return;
   }
 
@@ -2244,7 +2248,7 @@ async function regenerateProfile(): Promise<void> {
 async function regenerateCandidateProfile(): Promise<void> {
   const initialTranscript = transcript.value.trim();
   const followupText = followupTranscript.value.trim();
-  if (initialTranscript.length <= 40 || followupText.length <= 40) {
+  if (!hasEnoughInitialApplicantEvidence() || followupText.length <= 40) {
     return;
   }
 
