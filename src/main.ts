@@ -30,17 +30,35 @@ type AiProfileCard = {
 
 type AiArtifacts = {
   resumeMarkdown?: string;
+  resumeLatex?: string;
+  candidateProfileMarkdown?: string;
   profileCards?: AiProfileCard[];
   feedbackMarkdown?: string;
   followUpQuestions?: string[];
 };
 
-type GenerationMode = 'resume' | 'profile';
+type JobUrlExtraction = {
+  status: 'ok' | 'restricted' | 'not_job';
+  company?: string;
+  jobDescription?: string;
+  error?: string;
+};
+
+type InterviewQuestionGeneration = {
+  questions?: string[];
+  error?: string;
+};
+
+type GenerationMode = 'resume' | 'profile' | 'candidate';
 type RecordingMode = 'initial' | 'followup';
+type ContextMode = 'preset' | 'custom';
+type QuestionMode = 'preset' | 'custom' | 'cut_to_chase';
+type JobImportSource = 'url' | 'document';
 
 const MAX_SECONDS = 10 * 60;
 const EMPTY_RESUME_TEXT = 'Paste a transcript to generate a resume draft.';
-const EMPTY_PROFILE_TEXT = 'Generate a profile to see strengths, interests, fit, and gaps.';
+const EMPTY_PROFILE_TEXT = 'Generate a skill profile to see quick evidence-strength cards.';
+const EMPTY_CANDIDATE_PROFILE_TEXT = 'Generate a candidate profile to see task fit, relevant strengths, evidence, and gaps.';
 const EMPTY_FEEDBACK_TEXT = 'Generate outputs to see missing evidence and follow-up questions.';
 const JOB_DESCRIPTION_CONTEXT = `Company
 StartupDigital Services is a young company specializing in the creation of digital solutions for a diverse range of clients, including e-commerce, SaaS platforms, and business tools. We are looking for a junior freelance developer to strengthen our team on specific projects. You will collaborate with experienced developers to address the immediate needs of our clients.
@@ -83,17 +101,17 @@ x) Why Join Us?
 * Mentorship from experienced developers to help you grow your skills.
 * Potential for extended collaboration based on your performance and our needs.`;
 const INTERVIEW_QUESTIONS = [
-  'Tell me about the relevant qualifications you have for the job and the period of time you spent pursuing it.',
-  'Tell me about one project you completed and what you personally built.',
-  'Which HTML, CSS, or JavaScript work have you done? Give concrete examples.',
-  'Have you used Vue, React, or another front-end framework? What did you make with it?',
-  'Have you used PHP or Python for back-end or scripting tasks? What problem did it solve?',
-  'How comfortable are you with Git? Describe how you used it in a project.',
-  'Tell me about a time you fixed a bug, tested a feature, or validated that something worked.',
-  'How do you communicate progress, blockers, or follow-up notes to teammates or clients?',
-  'Give an example of working independently and meeting a deadline.',
-  'What would you do if a client requested a small urgent change on an existing website?',
-  'What are you most eager to learn during a short freelance junior developer mission?',
+  'Tell me about the relevant qualifications, training or 42 experience you have for his junior developer role and how long you have been developing these skills.',
+  'Choose one completed project that best fits this role. What did you personally build, what problem did it solve, and what result or working feature came out of it?',
+  'What concrete front-end, back-end, or scripting work have you done with HTML, CSS, JavaScript, React, Vue, PHP, Python, or similar tools? Give examples from real projects.',
+  'How have you used Git, debugging, testing, or validation to make sure your work was correct and ready to share?',
+  'Tell me about a time you worked independently, handled a deadline, fixed a small urgent issue, or communicated progress/blockers to teammates or clients.',
+  'What parts of this StartupDigital Services mission fit your strengths, and what would you most want to learn or improve during the project?',
+];
+const CUT_TO_CHASE_QUESTIONS = [
+  'I trust you have shown interest by researching more on our company and JD. Give us 3 strong reasons to hire you.',
+  'What are 2 promises you can make for what you can commit to us if you are hired?',
+  'What is one question you have that can show us what you value?',
 ];
 const MAX_INLINE_AUDIO_BYTES = 18 * 1024 * 1024;
 const recorderMimeTypeOptions = [
@@ -119,8 +137,10 @@ let activeRecordingMode: RecordingMode = 'initial';
 let followupReady = false;
 let lastProfileSignals: SkillSignal[] = [];
 let lastProfileMarkdown = '';
+let lastCandidateProfileMarkdown = '';
 let lastResumeMarkdown = '';
 let lastUpdatedProfileMarkdown = '';
+let lastUpdatedCandidateProfileMarkdown = '';
 let lastUpdatedResumeMarkdown = '';
 let lastFeedbackText = '';
 let audioContext: AudioContext | null = null;
@@ -129,12 +149,24 @@ let waveformAnimationId: number | null = null;
 let selectedAudioDeviceId = '';
 let micTestStream: MediaStream | null = null;
 let isMicTesting = false;
+let activeContextMode: ContextMode = 'preset';
+let latestJobImportSource: JobImportSource = 'url';
+let selectedJobDocument: File | null = null;
+let selectedApplicantDocument: File | null = null;
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
 if (!app) {
   throw new Error('App root was not found.');
 }
+
+const DOWNLOAD_ICON_HTML = `
+  <svg class="download-glyph" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 3v12"></path>
+    <path d="m7 10 5 5 5-5"></path>
+    <path d="M5 15v5h14v-5"></path>
+  </svg>
+`;
 
 app.innerHTML = `
   <main class="shell">
@@ -209,49 +241,146 @@ app.innerHTML = `
             <span id="mic-level-fill"></span>
           </div>
           <p id="mic-status">Mic status: not checked.</p>
+          <canvas class="waveform" id="waveform" width="640" height="120" aria-label="Live microphone waveform"></canvas>
         </div>
 
         <section class="question-guide">
           <h3>Suggested interview questions</h3>
-          <ol start="0">
+          <div class="context-mode-switch question-mode-switch" role="group" aria-label="Question type">
+            <button class="context-mode-button is-active" id="questions-preset" type="button">42_Collaborative_resume</button>
+            <button class="context-mode-button" id="questions-custom" type="button">Custom</button>
+          </div>
+          <ol id="preset-question-list" start="0">
             ${INTERVIEW_QUESTIONS.map((question) => `<li>${escapeHtml(question)}</li>`).join('')}
           </ol>
+          <div class="custom-question-panel hidden" id="custom-question-panel">
+            <div class="custom-question-actions">
+              <button class="secondary" id="generate-custom-questions" type="button">Generate</button>
+              <button class="cut-to-chase-button" id="questions-cut-to-chase" type="button">Cut to the Chase</button>
+              <p class="question-generation-status" id="question-generation-status" role="status"></p>
+            </div>
+            <textarea
+              class="question-custom-input"
+              id="custom-questions"
+              rows="8"
+              placeholder="Questions to find out more about applicant's experiences and expertise."
+            ></textarea>
+          </div>
         </section>
 
-        <canvas class="waveform" id="waveform" width="640" height="120" aria-label="Live microphone waveform"></canvas>
-
         <div class="recording-list" id="recording-list"></div>
+        <div class="transcription-helper hidden" id="recording-transcription-helper"></div>
       </aside>
 
       <section class="panel transcript-panel">
         <div class="panel-heading">
           <div>
-            <h2><span class="section-icon" aria-hidden="true">📼</span> → <span class="section-icon" aria-hidden="true">📄</span> RECORDING TO TRANSCRIPT</h2>
+            <h2>APPLICANT INFORMATION</h2>
           </div>
           <div class="panel-actions">
             <button class="ghost" id="load-sample" type="button">Load Sample</button>
           </div>
         </div>
 
-        <div class="drop-zone" id="drop-zone">
+        <section class="applicant-direct-section">
+          <div class="applicant-direct-form" aria-label="Applicant direct information">
+            <fieldset>
+              <legend>Contact</legend>
+              <label>
+                <span>Name</span>
+                <input class="applicant-direct-field" id="applicant-info-name" data-label="Name" type="text" placeholder="Candidate name" />
+              </label>
+              <label>
+                <span>Email</span>
+                <input class="applicant-direct-field" data-label="Email" type="email" placeholder="name@email.com" />
+              </label>
+              <label>
+                <span>Phone</span>
+                <input class="applicant-direct-field" data-label="Phone" type="tel" placeholder="+65 9000 0000" />
+              </label>
+              <label>
+                <span>Location</span>
+                <input class="applicant-direct-field" data-label="Location" type="text" placeholder="Singapore" />
+              </label>
+              <label>
+                <span>LinkedIn</span>
+                <input class="applicant-direct-field" data-label="LinkedIn" type="url" placeholder="https://linkedin.com/in/..." />
+              </label>
+              <label>
+                <span>GitHub</span>
+                <input class="applicant-direct-field" data-label="GitHub" type="url" placeholder="https://github.com/..." />
+              </label>
+              <label>
+                <span>Portfolio</span>
+                <input class="applicant-direct-field" data-label="Portfolio" type="url" placeholder="https://..." />
+              </label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Resume sections</legend>
+              <label>
+                <span>Education</span>
+                <textarea class="applicant-direct-field compact-field" data-label="Education" rows="3" placeholder="42 Singapore - Computer Programming - Sep 2023 to Sep 2025"></textarea>
+              </label>
+              <label>
+                <span>Certifications</span>
+                <textarea class="applicant-direct-field compact-field" data-label="Certifications" rows="3" placeholder="Certificate name - issuer - year"></textarea>
+              </label>
+              <label>
+                <span>Technical skills</span>
+                <textarea class="applicant-direct-field compact-field" data-label="Technical skills" rows="4" placeholder="Languages: Python, C, SQL&#10;Tools: Git, Docker, Linux"></textarea>
+              </label>
+            </fieldset>
+          </div>
+        </section>
+
+        <div class="drop-zone compact-drop-zone" id="drop-zone">
           <input id="file-input" type="file" accept="audio/*,.ogg,.oga,.ogx,.opus,.webm,.m4a,.mp3,.wav,.aac,.flac" multiple />
-          <p>Drop audio files for transcription here</p>
+          <p>Drop audio files for transcription</p>
           <div class="transcription-file-list" id="transcription-file-list"></div>
           <button class="secondary drop-transcribe-button" id="transcribe-files" type="button" disabled>Transcribe</button>
         </div>
 
         <div class="transcription-helper hidden" id="transcription-helper"></div>
 
-        <h3 class="transcription-title">Transcription</h3>
-        <textarea class="hidden-transcript" id="transcript" spellcheck="true"></textarea>
-        <div
-          class="transcript-editor is-empty"
-          id="transcript-editor"
-          contenteditable="true"
-          role="textbox"
-          aria-label="Transcription"
-          data-placeholder="Transcribed text for Interview will appear here."
-        ></div>
+        <section class="applicant-transcript-section">
+          <div class="section-title-row">
+            <h3 class="transcription-title">Transcription</h3>
+            <button class="title-download-button" id="download-transcript" type="button" aria-label="Download transcript" data-tooltip="Download transcript" disabled>
+              ${DOWNLOAD_ICON_HTML}
+            </button>
+          </div>
+          <textarea class="hidden-transcript" id="transcript" spellcheck="true"></textarea>
+          <div
+            class="transcript-editor is-empty"
+            id="transcript-editor"
+            contenteditable="true"
+            role="textbox"
+            aria-label="Transcription"
+            data-placeholder="Transcribed text for Interview will appear here."
+          ></div>
+        </section>
+
+        <section class="additional-info-section">
+          <h3 class="transcription-title">Additional information</h3>
+          <label class="applicant-document-upload">
+            <input
+              id="applicant-document-input"
+              type="file"
+              accept=".txt,.md,.markdown,.html,.htm,.csv,.json,.doc,.docx,.pdf,text/*"
+            />
+            <span>Upload additional applicant documentation</span>
+          </label>
+          <span class="applicant-document-name" id="applicant-document-name"></span>
+          <p class="applicant-document-status" id="applicant-document-status" role="status"></p>
+          <textarea
+            class="applicant-direct-field"
+            id="additional-info"
+            data-label="Other notes from uploaded doc"
+            rows="10"
+            placeholder="Other notes from uploaded documentation or applicant. Use this for exact dates, awards, project links, or anything that does not fit above."
+          ></textarea>
+        </section>
       </section>
     </section>
 
@@ -259,7 +388,13 @@ app.innerHTML = `
       <article class="panel resume-output">
         <div class="panel-heading">
           <div>
-            <h2><span class="section-icon" aria-hidden="true">👔</span> RESUME</h2>
+            <h2>
+              <span class="section-icon" aria-hidden="true">👔</span>
+              RESUME
+              <button class="title-download-button" id="download-resume" type="button" aria-label="Download resume PDF" data-tooltip="Download resume PDF" disabled>
+                ${DOWNLOAD_ICON_HTML}
+              </button>
+            </h2>
           </div>
           <div class="panel-actions">
             <button class="primary" id="generate-resume" type="button" disabled>Generate Resume</button>
@@ -267,28 +402,50 @@ app.innerHTML = `
           </div>
         </div>
         <div id="resume-output" class="document-output empty-output">${EMPTY_RESUME_TEXT}</div>
-        <div class="artifact-actions">
-          <button class="ghost" id="download-resume" type="button" disabled>Download Resume</button>
-        </div>
       </article>
 
       <article class="panel profile-output">
         <div class="panel-heading">
           <div>
-            <h2><span class="section-icon" aria-hidden="true">★</span> SKILL PROFILE</h2>
+            <h2>
+              <span class="section-icon" aria-hidden="true">★</span>
+              SKILL PROFILE
+              <button class="title-download-button" id="download-profile" type="button" aria-label="Download skill profile" data-tooltip="Download skill profile" disabled>
+                ${DOWNLOAD_ICON_HTML}
+              </button>
+            </h2>
           </div>
           <button class="secondary" id="generate-profile" type="button" disabled>Generate Skill Profile</button>
         </div>
         <div id="profile-output" class="profile-empty">${EMPTY_PROFILE_TEXT}</div>
-        <div class="artifact-actions">
-          <button class="ghost" id="download-profile" type="button" disabled>Download Skill Profile</button>
+      </article>
+
+      <article class="panel candidate-profile-output">
+        <div class="panel-heading">
+          <div>
+            <h2>
+              <span class="section-icon" aria-hidden="true">◆</span>
+              CANDIDATE PROFILE
+              <button class="title-download-button" id="download-candidate-profile" type="button" aria-label="Download candidate profile" data-tooltip="Download candidate profile" disabled>
+                ${DOWNLOAD_ICON_HTML}
+              </button>
+            </h2>
+          </div>
+          <button class="secondary" id="generate-candidate-profile" type="button" disabled>Generate Candidate Profile</button>
         </div>
+        <div id="candidate-profile-output" class="document-output empty-output">${EMPTY_CANDIDATE_PROFILE_TEXT}</div>
       </article>
 
       <article class="panel feedback-output">
         <div class="panel-heading">
           <div>
-            <h2><span class="section-icon" aria-hidden="true">?</span> INTERVIEW FEEDBACK</h2>
+            <h2>
+              <span class="section-icon" aria-hidden="true">💬</span>
+              INTERVIEW FEEDBACK
+              <button class="title-download-button" id="download-feedback" type="button" aria-label="Download feedback" data-tooltip="Download feedback" disabled>
+                ${DOWNLOAD_ICON_HTML}
+              </button>
+            </h2>
           </div>
         </div>
         <div id="feedback-output" class="feedback-stack empty-output">${EMPTY_FEEDBACK_TEXT}</div>
@@ -324,6 +481,7 @@ app.innerHTML = `
         <p class="note">Use this after reviewing the AI feedback questions. Follow-up recordings are saved separately.</p>
         <canvas class="waveform" id="followup-waveform" width="640" height="120" aria-label="Live follow-up microphone waveform"></canvas>
         <div class="recording-list" id="followup-recording-list"></div>
+        <div class="transcription-helper hidden" id="followup-recording-transcription-helper"></div>
       </aside>
 
       <section class="panel transcript-panel">
@@ -342,7 +500,12 @@ app.innerHTML = `
 
         <div class="transcription-helper hidden" id="followup-transcription-helper"></div>
 
-        <h3 class="transcription-title">Transcription</h3>
+        <div class="section-title-row">
+          <h3 class="transcription-title">Transcription</h3>
+          <button class="title-download-button" id="download-followup-transcript" type="button" aria-label="Download follow-up transcript" data-tooltip="Download follow-up transcript" disabled>
+            ${DOWNLOAD_ICON_HTML}
+          </button>
+        </div>
         <textarea class="hidden-transcript" id="followup-transcript" spellcheck="true"></textarea>
         <div
           class="transcript-editor is-empty"
@@ -359,7 +522,13 @@ app.innerHTML = `
       <article class="panel resume-output">
         <div class="panel-heading">
           <div>
-            <h2><span class="section-icon" aria-hidden="true">👔</span> UPDATED RESUME</h2>
+            <h2>
+              <span class="section-icon" aria-hidden="true">👔</span>
+              UPDATED RESUME
+              <button class="title-download-button" id="save-updated-resume-pdf" type="button" aria-label="Download updated resume PDF" data-tooltip="Download updated resume PDF" disabled>
+                ${DOWNLOAD_ICON_HTML}
+              </button>
+            </h2>
           </div>
           <div class="panel-actions">
             <button class="primary" id="regenerate-resume" type="button" disabled>Re-generate Resume</button>
@@ -367,23 +536,38 @@ app.innerHTML = `
           </div>
         </div>
         <div id="updated-resume-output" class="document-output empty-output">${EMPTY_RESUME_TEXT}</div>
-        <div class="artifact-actions">
-          <button class="ghost" id="save-updated-resume-pdf" type="button" disabled>Save as PDF</button>
-          <button class="ghost" id="download-updated-resume" type="button" disabled>Download Resume</button>
-        </div>
       </article>
 
       <article class="panel profile-output">
         <div class="panel-heading">
           <div>
-            <h2><span class="section-icon" aria-hidden="true">★</span> UPDATED SKILL PROFILE</h2>
+            <h2>
+              <span class="section-icon" aria-hidden="true">★</span>
+              UPDATED SKILL PROFILE
+              <button class="title-download-button" id="download-updated-profile" type="button" aria-label="Download updated skill profile" data-tooltip="Download updated skill profile" disabled>
+                ${DOWNLOAD_ICON_HTML}
+              </button>
+            </h2>
           </div>
           <button class="secondary" id="regenerate-profile" type="button" disabled>Re-generate Skill Profile</button>
         </div>
         <div id="updated-profile-output" class="profile-empty">${EMPTY_PROFILE_TEXT}</div>
-        <div class="artifact-actions">
-          <button class="ghost" id="download-updated-profile" type="button" disabled>Download Skill Profile</button>
+      </article>
+
+      <article class="panel candidate-profile-output">
+        <div class="panel-heading">
+          <div>
+            <h2>
+              <span class="section-icon" aria-hidden="true">◆</span>
+              UPDATED CANDIDATE PROFILE
+              <button class="title-download-button" id="download-updated-candidate-profile" type="button" aria-label="Download updated candidate profile" data-tooltip="Download updated candidate profile" disabled>
+                ${DOWNLOAD_ICON_HTML}
+              </button>
+            </h2>
+          </div>
+          <button class="secondary" id="regenerate-candidate-profile" type="button" disabled>Re-generate Candidate Profile</button>
         </div>
+        <div id="updated-candidate-profile-output" class="document-output empty-output">${EMPTY_CANDIDATE_PROFILE_TEXT}</div>
       </article>
     </section>
 
@@ -406,6 +590,25 @@ const followupStopButton = getElement<HTMLButtonElement>('followup-stop-recordin
 const followupReadyButton = getElement<HTMLButtonElement>('followup-ready');
 const recruiterNameInput = getElement<HTMLInputElement>('recruiter-name');
 const applicantNameInput = getElement<HTMLInputElement>('applicant-name');
+const presetContextButton = getElement<HTMLButtonElement>('context-preset');
+const customContextButton = getElement<HTMLButtonElement>('context-custom');
+const presetContextContent = getElement<HTMLDivElement>('preset-context-content');
+const customContextContent = getElement<HTMLDivElement>('custom-context-content');
+const jobDocumentInput = getElement<HTMLInputElement>('job-document-input');
+const jobDocumentName = getElement<HTMLSpanElement>('job-document-name');
+const jobUrlInput = getElement<HTMLInputElement>('job-url-input');
+const extractJobButton = getElement<HTMLButtonElement>('extract-job-url');
+const jobImportStatus = getElement<HTMLParagraphElement>('job-import-status');
+const customCompanyInput = getElement<HTMLTextAreaElement>('custom-company');
+const customJobDescriptionInput = getElement<HTMLTextAreaElement>('custom-job-description');
+const presetQuestionsButton = getElement<HTMLButtonElement>('questions-preset');
+const customQuestionsButton = getElement<HTMLButtonElement>('questions-custom');
+const cutToChaseQuestionsButton = getElement<HTMLButtonElement>('questions-cut-to-chase');
+const presetQuestionList = getElement<HTMLOListElement>('preset-question-list');
+const customQuestionPanel = getElement<HTMLDivElement>('custom-question-panel');
+const generateCustomQuestionsButton = getElement<HTMLButtonElement>('generate-custom-questions');
+const questionGenerationStatus = getElement<HTMLParagraphElement>('question-generation-status');
+const customQuestionsInput = getElement<HTMLTextAreaElement>('custom-questions');
 const recordingValidation = getElement<HTMLParagraphElement>('recording-validation');
 const followupRecordingValidation = getElement<HTMLParagraphElement>('followup-recording-validation');
 const micSelect = getElement<HTMLSelectElement>('mic-select');
@@ -418,6 +621,8 @@ const followupDropZone = getElement<HTMLDivElement>('followup-drop-zone');
 const followupFileInput = getElement<HTMLInputElement>('followup-file-input');
 const recordingList = getElement<HTMLDivElement>('recording-list');
 const followupRecordingList = getElement<HTMLDivElement>('followup-recording-list');
+const recordingTranscriptionHelper = getElement<HTMLDivElement>('recording-transcription-helper');
+const followupRecordingTranscriptionHelper = getElement<HTMLDivElement>('followup-recording-transcription-helper');
 const waveform = getElement<HTMLCanvasElement>('waveform');
 const followupWaveform = getElement<HTMLCanvasElement>('followup-waveform');
 const transcriptionFileList = getElement<HTMLDivElement>('transcription-file-list');
@@ -426,27 +631,40 @@ const transcriptionHelper = getElement<HTMLDivElement>('transcription-helper');
 const followupTranscriptionHelper = getElement<HTMLDivElement>('followup-transcription-helper');
 const transcript = getElement<HTMLTextAreaElement>('transcript');
 const transcriptEditor = getElement<HTMLDivElement>('transcript-editor');
+const applicantInfoNameInput = getElement<HTMLInputElement>('applicant-info-name');
+const applicantDocumentInput = getElement<HTMLInputElement>('applicant-document-input');
+const applicantDocumentName = getElement<HTMLSpanElement>('applicant-document-name');
+const applicantDocumentStatus = getElement<HTMLParagraphElement>('applicant-document-status');
+const additionalInfoInput = getElement<HTMLTextAreaElement>('additional-info');
 const followupTranscript = getElement<HTMLTextAreaElement>('followup-transcript');
 const followupTranscriptEditor = getElement<HTMLDivElement>('followup-transcript-editor');
 const transcribeFilesButton = getElement<HTMLButtonElement>('transcribe-files');
 const followupTranscribeFilesButton = getElement<HTMLButtonElement>('followup-transcribe-files');
 const generateResumeButton = getElement<HTMLButtonElement>('generate-resume');
 const generateProfileButton = getElement<HTMLButtonElement>('generate-profile');
+const generateCandidateProfileButton = getElement<HTMLButtonElement>('generate-candidate-profile');
 const regenerateResumeButton = getElement<HTMLButtonElement>('regenerate-resume');
 const regenerateProfileButton = getElement<HTMLButtonElement>('regenerate-profile');
+const regenerateCandidateProfileButton = getElement<HTMLButtonElement>('regenerate-candidate-profile');
 const resumeOutput = getElement<HTMLDivElement>('resume-output');
 const profileOutput = getElement<HTMLDivElement>('profile-output');
+const candidateProfileOutput = getElement<HTMLDivElement>('candidate-profile-output');
 const feedbackOutput = getElement<HTMLDivElement>('feedback-output');
 const updatedResumeOutput = getElement<HTMLDivElement>('updated-resume-output');
 const updatedProfileOutput = getElement<HTMLDivElement>('updated-profile-output');
+const updatedCandidateProfileOutput = getElement<HTMLDivElement>('updated-candidate-profile-output');
 const copyResumeButton = getElement<HTMLButtonElement>('copy-resume');
 const copyUpdatedResumeButton = getElement<HTMLButtonElement>('copy-updated-resume');
 const loadSampleButton = getElement<HTMLButtonElement>('load-sample');
 const saveUpdatedResumePdfButton = getElement<HTMLButtonElement>('save-updated-resume-pdf');
 const downloadResumeButton = getElement<HTMLButtonElement>('download-resume');
+const downloadTranscriptButton = getElement<HTMLButtonElement>('download-transcript');
+const downloadFeedbackButton = getElement<HTMLButtonElement>('download-feedback');
 const downloadProfileButton = getElement<HTMLButtonElement>('download-profile');
-const downloadUpdatedResumeButton = getElement<HTMLButtonElement>('download-updated-resume');
+const downloadCandidateProfileButton = getElement<HTMLButtonElement>('download-candidate-profile');
+const downloadFollowupTranscriptButton = getElement<HTMLButtonElement>('download-followup-transcript');
 const downloadUpdatedProfileButton = getElement<HTMLButtonElement>('download-updated-profile');
+const downloadUpdatedCandidateProfileButton = getElement<HTMLButtonElement>('download-updated-candidate-profile');
 const newSessionTopButton = getElement<HTMLButtonElement>('new-session-top');
 const newSessionBottomButton = getElement<HTMLButtonElement>('new-session-bottom');
 
@@ -471,16 +689,59 @@ micSelect.addEventListener('change', () => {
   }
 });
 transcriptEditor.addEventListener('input', syncTranscriptFromEditor);
+additionalInfoInput.addEventListener('input', updateGeneratorState);
+document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('.applicant-direct-field').forEach((field) => {
+  field.addEventListener('input', updateGeneratorState);
+});
+applicantInfoNameInput.addEventListener('input', () => {
+  applicantNameInput.value = applicantInfoNameInput.value;
+  updateGeneratorState();
+  clearRecordingValidation();
+});
+applicantDocumentInput.addEventListener('change', importApplicantDocument);
 followupTranscriptEditor.addEventListener('input', syncFollowupTranscriptFromEditor);
 applicantNameInput.addEventListener('input', () => {
+  applicantInfoNameInput.value = applicantNameInput.value;
   updateGeneratorState();
   clearRecordingValidation();
 });
 recruiterNameInput.addEventListener('input', clearRecordingValidation);
+presetContextButton.addEventListener('click', () => setContextMode('preset'));
+customContextButton.addEventListener('click', () => setContextMode('custom'));
+jobUrlInput.addEventListener('input', () => {
+  latestJobImportSource = 'url';
+  jobImportStatus.textContent = '';
+  updateJobExtractButtonState();
+});
+jobDocumentInput.addEventListener('change', () => {
+  selectedJobDocument = jobDocumentInput.files?.[0] || null;
+  latestJobImportSource = 'document';
+  jobDocumentName.textContent = selectedJobDocument ? selectedJobDocument.name : '';
+  jobImportStatus.textContent = selectedJobDocument
+    ? `Selected document: ${selectedJobDocument.name}`
+    : '';
+  jobImportStatus.classList.remove('is-error', 'is-success');
+  updateJobExtractButtonState();
+});
+extractJobButton.addEventListener('click', extractLatestJobSource);
+customCompanyInput.addEventListener('input', () => {
+  updateGeneratorState();
+  updateCustomQuestionGeneratorState();
+});
+customJobDescriptionInput.addEventListener('input', () => {
+  updateGeneratorState();
+  updateCustomQuestionGeneratorState();
+});
+presetQuestionsButton.addEventListener('click', () => setQuestionMode('preset'));
+customQuestionsButton.addEventListener('click', () => setQuestionMode('custom'));
+cutToChaseQuestionsButton.addEventListener('click', () => setQuestionMode('cut_to_chase'));
+generateCustomQuestionsButton.addEventListener('click', generateCustomInterviewQuestions);
 generateResumeButton.addEventListener('click', () => generateArtifacts('resume'));
 generateProfileButton.addEventListener('click', () => generateArtifacts('profile'));
+generateCandidateProfileButton.addEventListener('click', () => generateArtifacts('candidate'));
 regenerateResumeButton.addEventListener('click', regenerateResume);
 regenerateProfileButton.addEventListener('click', regenerateProfile);
+regenerateCandidateProfileButton.addEventListener('click', regenerateCandidateProfile);
 copyResumeButton.addEventListener('click', copyResume);
 copyUpdatedResumeButton.addEventListener('click', copyUpdatedResume);
 loadSampleButton.addEventListener('click', loadSampleTranscript);
@@ -493,12 +754,17 @@ followupTranscribeFilesButton.addEventListener('click', (event) => {
   event.stopPropagation();
   transcribeAudioFiles(followupTranscriptionFiles, 'followup');
 });
-downloadResumeButton.addEventListener('click', downloadResume);
+downloadResumeButton.addEventListener('click', () => saveResumeAsPdf(lastResumeMarkdown));
+downloadTranscriptButton.addEventListener('click', () => downloadTranscript('initial'));
+downloadFeedbackButton.addEventListener('click', downloadFeedback);
 downloadProfileButton.addEventListener('click', downloadProfile);
-downloadUpdatedResumeButton.addEventListener('click', downloadUpdatedResume);
+downloadCandidateProfileButton.addEventListener('click', downloadCandidateProfile);
+downloadFollowupTranscriptButton.addEventListener('click', () => downloadTranscript('followup'));
 downloadUpdatedProfileButton.addEventListener('click', downloadUpdatedProfile);
+downloadUpdatedCandidateProfileButton.addEventListener('click', downloadUpdatedCandidateProfile);
 newSessionTopButton.addEventListener('click', startNewSession);
 newSessionBottomButton.addEventListener('click', startNewSession);
+updateCustomQuestionGeneratorState();
 
 dropZone.addEventListener('click', () => fileInput.click());
 transcriptionFileList.addEventListener('click', (event) => event.stopPropagation());
@@ -544,50 +810,390 @@ function getElement<T extends HTMLElement>(id: string): T {
 
 function renderContextSectionHtml(): string {
   return `
-    <div class="context-copy">
-      <h3><u>Company</u></h3>
-      <p>StartupDigital Services is a young company specializing in the creation of digital solutions for a diverse range of clients, including e-commerce, SaaS platforms, and business tools. We are looking for a junior freelance developer to strengthen our team on specific projects. You will collaborate with experienced developers to address the immediate needs of our clients.</p>
+    <div class="context-mode-switch" role="group" aria-label="Context type">
+      <button class="context-mode-button is-active" id="context-preset" type="button">42_Collaborative_resume</button>
+      <button class="context-mode-button" id="context-custom" type="button">Custom</button>
+    </div>
 
-      <h3><u>Job Description</u></h3>
-      <dl>
-        <dt>i) Feature Development:</dt>
-        <dd>Implement simple features on existing websites (forms, front-end modules, light back-end tasks).</dd>
+    <div class="context-copy" id="preset-context-content">
+      ${renderPresetContextHtml()}
+    </div>
 
-        <dt>ii) Minor Modifications:</dt>
-        <dd>Content integration, CSS style adjustments, or fixing HTML/JavaScript bugs.</dd>
+    <div class="custom-context hidden" id="custom-context-content">
+      <div class="job-url-import">
+        <label class="job-document-upload">
+          <input
+            id="job-document-input"
+            type="file"
+            accept=".txt,.md,.markdown,.html,.htm,.csv,.json,.doc,.docx,.pdf,text/*"
+          />
+          <span>Upload job description doc.</span>
+        </label>
+        <span class="job-import-or">OR</span>
+        <input
+          id="job-url-input"
+          type="url"
+          placeholder="Copy and paste link to job."
+          aria-label="Job application URL"
+        />
+        <button class="secondary" id="extract-job-url" type="button" disabled>Extract</button>
+      </div>
+      <span class="job-document-name" id="job-document-name"></span>
+      <p class="job-import-status" id="job-import-status" role="status"></p>
 
-        <dt>iii) Testing and Validation:</dt>
-        <dd>Participate in technical testing to ensure the quality of deliverables.</dd>
+      <div class="manual-job-fallback" id="manual-job-fallback">
+        <label>
+          <span><u>Company</u></span>
+          <textarea
+            id="custom-company"
+            rows="5"
+            placeholder="Copy and paste the company information here."
+          ></textarea>
+        </label>
 
-        <dt>iv) Technical Support:</dt>
-        <dd>Provide occasional assistance on client requests (improvements or quick adjustments).</dd>
-
-        <dt>v) Required Skills:</dt>
-        <dd>Basic knowledge of HTML, CSS, and JavaScript (Vanilla or simple frameworks like Vue.js or React). Basic understanding of PHP or Python for light back-end tasks. Familiarity with Git for version control (beginner level accepted).</dd>
-
-        <dt>vi) Experience:</dt>
-        <dd>A few completed personal or academic projects (portfolio or GitHub appreciated). Previous freelance or internship experience is a plus but not mandatory.</dd>
-
-        <dt>vii) Personal Qualities:</dt>
-        <dd>Autonomy and reliability in meeting deadlines. Ability to communicate clearly in writing for project follow-ups. A strong desire to learn quickly in a hands-on environment.</dd>
-
-        <dt>viii) Duration:</dt>
-        <dd>Initial mission of 1 to 3 months, approximately 10 to 15 hours per week.</dd>
-
-        <dt>ix) Work Mode:</dt>
-        <dd>Remote work with weekly check-ins via video conferencing.</dd>
-
-        <dt>x) Why Join Us?</dt>
-        <dd>
-          <ul>
-            <li>Work on real, impactful projects for clients.</li>
-            <li>Mentorship from experienced developers to help you grow your skills.</li>
-            <li>Potential for extended collaboration based on your performance and our needs.</li>
-          </ul>
-        </dd>
-      </dl>
+        <label>
+          <span><u>Job Description</u></span>
+          <textarea
+            id="custom-job-description"
+            rows="8"
+            placeholder="Copy and paste the job description here."
+          ></textarea>
+        </label>
+      </div>
     </div>
   `;
+}
+
+function renderPresetContextHtml(): string {
+  return `
+    <h3><u>Company</u></h3>
+    <p>StartupDigital Services is a young company specializing in the creation of digital solutions for a diverse range of clients, including e-commerce, SaaS platforms, and business tools. We are looking for a junior freelance developer to strengthen our team on specific projects. You will collaborate with experienced developers to address the immediate needs of our clients.</p>
+
+    <h3><u>Job Description</u></h3>
+    <dl>
+      <dt>i) Feature Development:</dt>
+      <dd>Implement simple features on existing websites (forms, front-end modules, light back-end tasks).</dd>
+
+      <dt>ii) Minor Modifications:</dt>
+      <dd>Content integration, CSS style adjustments, or fixing HTML/JavaScript bugs.</dd>
+
+      <dt>iii) Testing and Validation:</dt>
+      <dd>Participate in technical testing to ensure the quality of deliverables.</dd>
+
+      <dt>iv) Technical Support:</dt>
+      <dd>Provide occasional assistance on client requests (improvements or quick adjustments).</dd>
+
+      <dt>v) Required Skills:</dt>
+      <dd>Basic knowledge of HTML, CSS, and JavaScript (Vanilla or simple frameworks like Vue.js or React). Basic understanding of PHP or Python for light back-end tasks. Familiarity with Git for version control (beginner level accepted).</dd>
+
+      <dt>vi) Experience:</dt>
+      <dd>A few completed personal or academic projects (portfolio or GitHub appreciated). Previous freelance or internship experience is a plus but not mandatory.</dd>
+
+      <dt>vii) Personal Qualities:</dt>
+      <dd>Autonomy and reliability in meeting deadlines. Ability to communicate clearly in writing for project follow-ups. A strong desire to learn quickly in a hands-on environment.</dd>
+
+      <dt>viii) Duration:</dt>
+      <dd>Initial mission of 1 to 3 months, approximately 10 to 15 hours per week.</dd>
+
+      <dt>ix) Work Mode:</dt>
+      <dd>Remote work with weekly check-ins via video conferencing.</dd>
+
+      <dt>x) Why Join Us?</dt>
+      <dd>
+        <ul>
+          <li>Work on real, impactful projects for clients.</li>
+          <li>Mentorship from experienced developers to help you grow your skills.</li>
+          <li>Potential for extended collaboration based on your performance and our needs.</li>
+        </ul>
+      </dd>
+    </dl>
+  `;
+}
+
+function setContextMode(mode: ContextMode): void {
+  activeContextMode = mode;
+  const isPreset = mode === 'preset';
+
+  presetContextButton.classList.toggle('is-active', isPreset);
+  customContextButton.classList.toggle('is-active', !isPreset);
+  presetContextButton.setAttribute('aria-pressed', String(isPreset));
+  customContextButton.setAttribute('aria-pressed', String(!isPreset));
+  presetContextContent.classList.toggle('hidden', !isPreset);
+  customContextContent.classList.toggle('hidden', isPreset);
+  updateGeneratorState();
+}
+
+function setQuestionMode(mode: QuestionMode): void {
+  const isPreset = mode === 'preset';
+  const isCustom = mode === 'custom';
+  const isCutToChase = mode === 'cut_to_chase';
+
+  presetQuestionsButton.classList.toggle('is-active', isPreset);
+  customQuestionsButton.classList.toggle('is-active', isCustom);
+  cutToChaseQuestionsButton.classList.toggle('is-active', isCutToChase);
+  presetQuestionsButton.setAttribute('aria-pressed', String(isPreset));
+  customQuestionsButton.setAttribute('aria-pressed', String(isCustom));
+  cutToChaseQuestionsButton.setAttribute('aria-pressed', String(isCutToChase));
+  presetQuestionList.classList.toggle('hidden', !isPreset);
+  customQuestionPanel.classList.toggle('hidden', isPreset);
+  customQuestionPanel.classList.toggle('is-static', isCutToChase);
+
+  if (isCutToChase) {
+    customQuestionsInput.value = CUT_TO_CHASE_QUESTIONS
+      .map((question, index) => `${index + 1}. ${question}`)
+      .join('\n\n');
+    questionGenerationStatus.classList.remove('is-error', 'is-success');
+    questionGenerationStatus.textContent = '';
+  }
+
+  updateCustomQuestionGeneratorState();
+}
+
+function updateCustomQuestionGeneratorState(): void {
+  const hasCustomContext = customCompanyInput.value.trim().length > 0 ||
+    customJobDescriptionInput.value.trim().length > 0;
+  generateCustomQuestionsButton.disabled = !hasCustomContext;
+}
+
+function updateJobExtractButtonState(): void {
+  extractJobButton.disabled = !jobUrlInput.value.trim() && !selectedJobDocument;
+}
+
+async function extractLatestJobSource(): Promise<void> {
+  if (latestJobImportSource === 'document') {
+    await extractJobDocument();
+    return;
+  }
+  await extractJobUrl();
+}
+
+async function extractJobUrl(): Promise<void> {
+  const url = jobUrlInput.value.trim();
+  if (!url) {
+    return;
+  }
+
+  const startedAt = Date.now();
+  let elapsedTimer = 0;
+  const updateElapsedStatus = () => {
+    jobImportStatus.textContent = `Reading job link... ${formatElapsedTime(startedAt)}`;
+  };
+  extractJobButton.disabled = true;
+  const stopButtonTimer = startButtonTimer(extractJobButton, 'Extracting...');
+  jobImportStatus.classList.remove('is-error', 'is-success');
+  updateElapsedStatus();
+  elapsedTimer = window.setInterval(updateElapsedStatus, 1000);
+
+  try {
+    const response = await fetch('/api/extract-job-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const result = await response.json() as JobUrlExtraction;
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Job link extraction failed.');
+    }
+
+    if (result.status === 'restricted') {
+      jobImportStatus.classList.add('is-error');
+      jobImportStatus.textContent = `This page has restrictions which do not allow extraction. Copy and paste the company and job description below. ${formatElapsedTime(startedAt)}`;
+      updateGeneratorState();
+      updateCustomQuestionGeneratorState();
+      return;
+    }
+
+    if (result.status === 'not_job') {
+      jobImportStatus.classList.add('is-error');
+      jobImportStatus.textContent = `This is not a job application page. ${formatElapsedTime(startedAt)}`;
+      updateGeneratorState();
+      updateCustomQuestionGeneratorState();
+      return;
+    }
+
+    customCompanyInput.value = result.company || '';
+    customJobDescriptionInput.value = result.jobDescription || '';
+    jobImportStatus.classList.add('is-success');
+    jobImportStatus.textContent = `Job details extracted. Review the company and job description before generating. ${formatElapsedTime(startedAt)}`;
+    updateGeneratorState();
+    updateCustomQuestionGeneratorState();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Job link extraction failed.';
+    jobImportStatus.classList.add('is-error');
+    jobImportStatus.textContent = `${message} ${formatElapsedTime(startedAt)}`;
+  } finally {
+    window.clearInterval(elapsedTimer);
+    stopButtonTimer();
+    updateJobExtractButtonState();
+    extractJobButton.textContent = 'Extract';
+  }
+}
+
+async function extractJobDocument(): Promise<void> {
+  if (!selectedJobDocument) {
+    return;
+  }
+
+  const startedAt = Date.now();
+  let elapsedTimer = 0;
+  const updateElapsedStatus = () => {
+    jobImportStatus.textContent = `Reading job document... ${formatElapsedTime(startedAt)}`;
+  };
+  extractJobButton.disabled = true;
+  const stopButtonTimer = startButtonTimer(extractJobButton, 'Extracting...');
+  jobImportStatus.classList.remove('is-error', 'is-success');
+  updateElapsedStatus();
+  elapsedTimer = window.setInterval(updateElapsedStatus, 1000);
+
+  try {
+    const text = await selectedJobDocument.text();
+    const response = await fetch('/api/extract-job-document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: selectedJobDocument.name,
+        mimeType: selectedJobDocument.type,
+        text,
+      }),
+    });
+    const result = await response.json() as JobUrlExtraction;
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Job document extraction failed.');
+    }
+
+    if (result.status === 'restricted') {
+      jobImportStatus.classList.add('is-error');
+      jobImportStatus.textContent = `This document could not be read for extraction. Copy and paste the company and job description below. ${formatElapsedTime(startedAt)}`;
+      return;
+    }
+
+    if (result.status === 'not_job') {
+      jobImportStatus.classList.add('is-error');
+      jobImportStatus.textContent = `This is not a job application page. ${formatElapsedTime(startedAt)}`;
+      return;
+    }
+
+    customCompanyInput.value = result.company || '';
+    customJobDescriptionInput.value = result.jobDescription || '';
+    jobImportStatus.classList.add('is-success');
+    jobImportStatus.textContent = `Job details extracted from document. Review the company and job description before generating. ${formatElapsedTime(startedAt)}`;
+    updateGeneratorState();
+    updateCustomQuestionGeneratorState();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Job document extraction failed.';
+    jobImportStatus.classList.add('is-error');
+    jobImportStatus.textContent = `${message} ${formatElapsedTime(startedAt)}`;
+  } finally {
+    window.clearInterval(elapsedTimer);
+    stopButtonTimer();
+    updateJobExtractButtonState();
+    extractJobButton.textContent = 'Extract';
+  }
+}
+
+async function importApplicantDocument(): Promise<void> {
+  selectedApplicantDocument = applicantDocumentInput.files?.[0] || null;
+  applicantDocumentName.textContent = selectedApplicantDocument ? selectedApplicantDocument.name : '';
+  applicantDocumentStatus.classList.remove('is-error', 'is-success');
+
+  if (!selectedApplicantDocument) {
+    applicantDocumentStatus.textContent = '';
+    return;
+  }
+
+  try {
+    const text = await selectedApplicantDocument.text();
+    if (!text.trim() || looksLikeUnreadableDocumentText(text)) {
+      throw new Error('This document could not be read as text. Paste the details below instead.');
+    }
+
+    additionalInfoInput.value = text.trim();
+    applicantDocumentStatus.classList.add('is-success');
+    applicantDocumentStatus.textContent = 'Additional information loaded.';
+    updateGeneratorState();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'This document could not be read.';
+    applicantDocumentStatus.classList.add('is-error');
+    applicantDocumentStatus.textContent = message;
+  }
+}
+
+function looksLikeUnreadableDocumentText(text: string): boolean {
+  const sample = text.slice(0, 2000);
+  if (/^%PDF-|^PK\u0003\u0004/.test(sample)) {
+    return true;
+  }
+  const controlCharacters = sample.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || [];
+  return sample.length > 0 && controlCharacters.length / sample.length > 0.02;
+}
+
+async function generateCustomInterviewQuestions(): Promise<void> {
+  const company = customCompanyInput.value.trim();
+  const jobDescription = customJobDescriptionInput.value.trim();
+
+  if (!company && !jobDescription) {
+    questionGenerationStatus.classList.add('is-error');
+    questionGenerationStatus.textContent = 'Add company or job information first.';
+    return;
+  }
+
+  const startedAt = Date.now();
+  let elapsedTimer = 0;
+  const updateElapsedStatus = () => {
+    questionGenerationStatus.textContent = `Generating questions... ${formatElapsedTime(startedAt)}`;
+  };
+  generateCustomQuestionsButton.disabled = true;
+  const stopButtonTimer = startButtonTimer(generateCustomQuestionsButton, 'Generating...');
+  questionGenerationStatus.classList.remove('is-error', 'is-success');
+  updateElapsedStatus();
+  elapsedTimer = window.setInterval(updateElapsedStatus, 1000);
+
+  try {
+    const response = await fetch('/api/generate-interview-questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company, jobDescription }),
+    });
+    const result = await response.json() as InterviewQuestionGeneration;
+
+    if (!response.ok) {
+      const detailText = Array.isArray((result as { details?: string[] }).details)
+        ? `\n${(result as { details: string[] }).details.join('\n')}`
+        : '';
+      throw new Error(`${result.error || 'Question generation failed.'}${detailText}`);
+    }
+
+    const questions = result.questions || [];
+    customQuestionsInput.value = questions.map((question, index) => `${index + 1}. ${question}`).join('\n\n');
+    questionGenerationStatus.classList.add('is-success');
+    questionGenerationStatus.textContent = `Generated ${questions.length} custom questions. ${formatElapsedTime(startedAt)}`;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Question generation failed.';
+    questionGenerationStatus.classList.add('is-error');
+    questionGenerationStatus.textContent = `${message} ${formatElapsedTime(startedAt)}`;
+  } finally {
+    window.clearInterval(elapsedTimer);
+    stopButtonTimer();
+    generateCustomQuestionsButton.textContent = 'Generate';
+    updateCustomQuestionGeneratorState();
+  }
+}
+
+function formatElapsedTime(startedAt: number): string {
+  const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+  return `(${seconds}s)`;
+}
+
+function startButtonTimer(button: HTMLButtonElement, label: string): () => void {
+  const startedAt = Date.now();
+  const updateLabel = () => {
+    button.textContent = `${label} ${formatElapsedTime(startedAt)}`;
+  };
+  updateLabel();
+  const timerId = window.setInterval(updateLabel, 1000);
+  return () => window.clearInterval(timerId);
 }
 
 async function startRecording(mode: RecordingMode): Promise<void> {
@@ -1084,7 +1690,7 @@ function renderRecordings(mode: RecordingMode = 'initial'): void {
           </div>
           <div class="recording-actions">
             <button class="mini-action transcribe-recording ${recording.transcribed ? 'is-transcribed' : ''}" type="button" data-recording-mode="${mode}" data-recording-id="${recording.id}" ${recording.transcribed ? 'disabled' : ''}>${recording.transcribed ? 'transcribed' : 'Transcribe'}</button>
-            <a class="download-icon" href="${recording.url}" download="${escapeHtml(recording.name)}" aria-label="Download recording ${index + 1}" data-tooltip="Download recording ${index + 1}">⬇</a>
+            <a class="download-icon" href="${recording.url}" download="${escapeHtml(recording.name)}" aria-label="Download recording ${index + 1}" data-tooltip="Download recording ${index + 1}">${DOWNLOAD_ICON_HTML}</a>
           </div>
         </div>
       `,
@@ -1140,7 +1746,7 @@ function handleRecordingAction(event: MouseEvent): void {
     return;
   }
 
-  transcribeAudioFiles([recording], mode);
+  transcribeAudioFiles([recording], mode, button);
 }
 
 function handleTranscriptionFileAction(event: MouseEvent): void {
@@ -1160,17 +1766,30 @@ function handleTranscriptionFileAction(event: MouseEvent): void {
   updateTranscribeState(mode);
 }
 
-async function transcribeAudioFiles(filesToTranscribe = transcriptionFiles, mode: RecordingMode = 'initial'): Promise<void> {
+async function transcribeAudioFiles(
+  filesToTranscribe = transcriptionFiles,
+  mode: RecordingMode = 'initial',
+  actionButton?: HTMLButtonElement,
+): Promise<void> {
   const pendingFiles = filesToTranscribe.filter((file) => !file.transcribed);
   if (!pendingFiles.length) {
     return;
   }
 
+  const isRecordedInterviewSource = Boolean(actionButton);
   const targetButton = mode === 'followup' ? followupTranscribeFilesButton : transcribeFilesButton;
-  const targetHelper = mode === 'followup' ? followupTranscriptionHelper : transcriptionHelper;
+  const targetHelper = getTranscriptionHelper(mode, isRecordedInterviewSource);
+  const helperTitle = isRecordedInterviewSource ? 'Transcribing recorded interview...' : 'Transcribing uploaded audio...';
+  const helperIntro = isRecordedInterviewSource
+    ? 'Sending the finished interview recording to transcription providers. Keep this page open.'
+    : 'Sending uploaded recordings to transcription providers. Keep this page open.';
   targetButton.disabled = true;
+  if (actionButton) {
+    actionButton.disabled = true;
+  }
+  const stopButtonTimer = startButtonTimer(actionButton || targetButton, 'Transcribing...');
   targetHelper.classList.remove('hidden');
-  targetHelper.innerHTML = '<strong>Transcribing audio...</strong><p>Sending uploaded recordings to transcription providers. Keep this page open.</p>';
+  targetHelper.innerHTML = `<strong>${helperTitle}</strong><p>${helperIntro}</p>`;
 
   try {
     const transcriptChunks: string[] = [];
@@ -1181,7 +1800,7 @@ async function transcribeAudioFiles(filesToTranscribe = transcriptionFiles, mode
         throw new Error(`${file.name} is too large for V2A inline transcription. Keep files below 18 MB for now.`);
       }
 
-      targetHelper.innerHTML = `<strong>Transcribing audio...</strong><p>Processing ${index + 1} of ${pendingFiles.length}: ${escapeHtml(file.name)}</p>`;
+      targetHelper.innerHTML = `<strong>${helperTitle}</strong><p>Processing ${index + 1} of ${pendingFiles.length}: ${escapeHtml(file.name)}</p>`;
       const data = await blobToBase64(file.blob);
       const response = await fetch('/api/transcribe', {
         method: 'POST',
@@ -1212,21 +1831,40 @@ async function transcribeAudioFiles(filesToTranscribe = transcriptionFiles, mode
       ? `${currentTranscript.trim()}\n\n${combinedTranscript}`
       : combinedTranscript, mode);
 
-    targetHelper.innerHTML = '<strong>Transcription complete</strong><p>The transcript box has been updated. Review the text before generating artifacts.</p>';
+    targetHelper.innerHTML = `<strong>${isRecordedInterviewSource ? 'Recorded interview transcription complete' : 'Uploaded audio transcription complete'}</strong><p>The shared transcript box has been updated. Review the text before generating artifacts.</p>`;
     renderRecordings(mode);
     renderTranscriptionFiles(mode);
     updateGeneratorState();
   } catch (error) {
-    showTranscriptionFallback(error instanceof Error ? error.message : 'Transcription failed.', pendingFiles, mode);
+    showTranscriptionFallback(error instanceof Error ? error.message : 'Transcription failed.', pendingFiles, mode, isRecordedInterviewSource);
   } finally {
+    stopButtonTimer();
+    if (!actionButton) {
+      targetButton.textContent = 'Transcribe';
+    }
+    if (actionButton && !actionButton.classList.contains('is-transcribed')) {
+      actionButton.textContent = 'Transcribe';
+    }
     updateTranscribeState(mode);
   }
 }
 
-function showTranscriptionFallback(message: string, filesForPrompt = transcriptionFiles, mode: RecordingMode = 'initial'): void {
+function getTranscriptionHelper(mode: RecordingMode, isRecordedInterviewSource: boolean): HTMLDivElement {
+  if (mode === 'followup') {
+    return isRecordedInterviewSource ? followupRecordingTranscriptionHelper : followupTranscriptionHelper;
+  }
+  return isRecordedInterviewSource ? recordingTranscriptionHelper : transcriptionHelper;
+}
+
+function showTranscriptionFallback(
+  message: string,
+  filesForPrompt = transcriptionFiles,
+  mode: RecordingMode = 'initial',
+  isRecordedInterviewSource = false,
+): void {
   const fileNames = filesForPrompt.map((file, index) => `${index + 1}. ${file.name}`).join('\n');
   const prompt = `Please transcribe these interview audio chunks in order. Preserve speaker labels where possible. After transcription, combine the chunks into one clean transcript. Do not summarize yet.\n\nFiles:\n${fileNames}`;
-  const targetHelper = mode === 'followup' ? followupTranscriptionHelper : transcriptionHelper;
+  const targetHelper = getTranscriptionHelper(mode, isRecordedInterviewSource);
 
   targetHelper.classList.remove('hidden');
   targetHelper.innerHTML = `
@@ -1334,22 +1972,33 @@ function updateGeneratorState(): void {
   const hasFollowupTranscript = followupTranscript.value.trim().length > 40;
   generateResumeButton.disabled = !hasTranscript;
   generateProfileButton.disabled = !hasTranscript;
+  generateCandidateProfileButton.disabled = !hasTranscript;
   regenerateResumeButton.disabled = !hasTranscript || !hasFollowupTranscript;
   regenerateProfileButton.disabled = !lastUpdatedResumeMarkdown.trim();
+  regenerateCandidateProfileButton.disabled = !hasTranscript || !hasFollowupTranscript;
   updateExportState();
 }
 
 function updateExportState(): void {
   const hasResume = lastResumeMarkdown.trim().length > 0;
+  const hasTranscript = transcript.value.trim().length > 0;
+  const hasFeedback = lastFeedbackText.trim().length > 0;
   const hasProfile = lastProfileSignals.length > 0 || lastProfileMarkdown.trim().length > 0;
+  const hasCandidateProfile = lastCandidateProfileMarkdown.trim().length > 0;
+  const hasFollowupTranscript = followupTranscript.value.trim().length > 0;
   const hasUpdatedResume = lastUpdatedResumeMarkdown.trim().length > 0;
   const hasUpdatedProfile = lastUpdatedProfileMarkdown.trim().length > 0;
+  const hasUpdatedCandidateProfile = lastUpdatedCandidateProfileMarkdown.trim().length > 0;
 
   downloadResumeButton.disabled = !hasResume;
+  downloadTranscriptButton.disabled = !hasTranscript;
+  downloadFeedbackButton.disabled = !hasFeedback;
   downloadProfileButton.disabled = !hasProfile;
+  downloadCandidateProfileButton.disabled = !hasCandidateProfile;
+  downloadFollowupTranscriptButton.disabled = !hasFollowupTranscript;
   saveUpdatedResumePdfButton.disabled = !hasUpdatedResume;
-  downloadUpdatedResumeButton.disabled = !hasUpdatedResume;
   downloadUpdatedProfileButton.disabled = !hasUpdatedProfile;
+  downloadUpdatedCandidateProfileButton.disabled = !hasUpdatedCandidateProfile;
   copyUpdatedResumeButton.disabled = !hasUpdatedResume;
 }
 
@@ -1362,10 +2011,24 @@ async function generateArtifacts(mode: GenerationMode): Promise<void> {
   if (rawTranscript.length <= 40) {
     return;
   }
+  const applicantEvidence = buildApplicantEvidence(rawTranscript);
+  const generationButton = mode === 'resume'
+    ? generateResumeButton
+    : mode === 'candidate'
+      ? generateCandidateProfileButton
+      : generateProfileButton;
+  const busyText = mode === 'resume'
+    ? 'Generating Resume...'
+    : mode === 'candidate'
+      ? 'Generating Candidate Profile...'
+      : 'Generating Skill Profile...';
 
   setGenerationBusy(mode, true);
+  const stopButtonTimer = startButtonTimer(generationButton, busyText);
   if (mode === 'resume') {
     renderDocumentOutput(resumeOutput, 'Generating resume...', EMPTY_RESUME_TEXT);
+  } else if (mode === 'candidate') {
+    renderDocumentOutput(candidateProfileOutput, 'Generating candidate profile...', EMPTY_CANDIDATE_PROFILE_TEXT);
   } else {
     profileOutput.className = 'profile-empty';
     profileOutput.textContent = 'Generating skill profile...';
@@ -1380,8 +2043,8 @@ async function generateArtifacts(mode: GenerationMode): Promise<void> {
       body: JSON.stringify({
         candidateName: context.name,
         target: context.target,
-        transcript: rawTranscript,
-        mode,
+        transcript: applicantEvidence,
+        mode: mode === 'resume' ? 'resume' : 'profile',
       }),
     });
 
@@ -1399,22 +2062,50 @@ async function generateArtifacts(mode: GenerationMode): Promise<void> {
     if (mode === 'resume') {
       lastResumeMarkdown = '';
       renderDocumentOutput(resumeOutput, `AI resume generation failed: ${message}`, EMPTY_RESUME_TEXT);
+    } else if (mode === 'candidate') {
+      lastCandidateProfileMarkdown = '';
+      renderDocumentOutput(candidateProfileOutput, `AI candidate profile generation failed: ${message}`, EMPTY_CANDIDATE_PROFILE_TEXT);
     } else {
       lastFeedbackText = '';
       profileOutput.className = 'profile-empty';
-      profileOutput.textContent = 'AI profile was not generated.';
+      profileOutput.textContent = 'AI skill profile was not generated.';
       renderFeedbackOutput(`Skill profile generation failed: ${message}`, []);
     }
   } finally {
+    stopButtonTimer();
     setGenerationBusy(mode, false);
     updateExportState();
   }
+}
+
+function buildApplicantEvidence(initialTranscript: string): string {
+  const applicantDirectInfo = collectApplicantDirectInfo();
+  return [
+    'INITIAL INTERVIEW TRANSCRIPT',
+    initialTranscript,
+    applicantDirectInfo ? ['', 'APPLICANT-PROVIDED DIRECT INFORMATION', applicantDirectInfo].join('\n') : '',
+  ].filter(Boolean).join('\n');
+}
+
+function collectApplicantDirectInfo(): string {
+  const fields = Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('.applicant-direct-field'));
+  return fields
+    .map((field) => {
+      const value = field.value.trim();
+      const label = field.dataset.label || field.getAttribute('aria-label') || 'Applicant detail';
+      return value ? `${label}: ${value}` : '';
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 function setGenerationBusy(mode: GenerationMode, isBusy: boolean): void {
   if (mode === 'resume') {
     generateResumeButton.disabled = isBusy;
     generateResumeButton.textContent = isBusy ? 'Generating Resume...' : 'Generate Resume';
+  } else if (mode === 'candidate') {
+    generateCandidateProfileButton.disabled = isBusy;
+    generateCandidateProfileButton.textContent = isBusy ? 'Generating Candidate Profile...' : 'Generate Candidate Profile';
   } else {
     generateProfileButton.disabled = isBusy;
     generateProfileButton.textContent = isBusy ? 'Generating Skill Profile...' : 'Generate Skill Profile';
@@ -1423,13 +2114,17 @@ function setGenerationBusy(mode: GenerationMode, isBusy: boolean): void {
 
 function renderAiArtifacts(artifacts: AiArtifacts, mode: GenerationMode): void {
   if (mode === 'resume') {
-    lastResumeMarkdown = artifacts.resumeMarkdown || '';
+    lastResumeMarkdown = getResumeArtifactContent(artifacts);
     renderDocumentOutput(resumeOutput, lastResumeMarkdown || EMPTY_RESUME_TEXT, EMPTY_RESUME_TEXT);
-    copyResumeButton.disabled = !artifacts.resumeMarkdown;
+    copyResumeButton.disabled = !lastResumeMarkdown;
     return;
   }
 
-  renderAiProfile(artifacts.profileCards || []);
+  if (mode === 'candidate') {
+    renderCandidateProfile(artifacts, candidateProfileOutput);
+  } else {
+    renderAiProfile(artifacts.profileCards || []);
+  }
 
   const feedbackParts = [
     artifacts.feedbackMarkdown || '',
@@ -1449,7 +2144,7 @@ async function regenerateResume(): Promise<void> {
   }
 
   regenerateResumeButton.disabled = true;
-  regenerateResumeButton.textContent = 'Re-generating Resume...';
+  const stopButtonTimer = startButtonTimer(regenerateResumeButton, 'Re-generating Resume...');
   renderDocumentOutput(updatedResumeOutput, 'Re-generating resume...', EMPTY_RESUME_TEXT);
 
   try {
@@ -1461,8 +2156,7 @@ async function regenerateResume(): Promise<void> {
         candidateName: context.name,
         target: context.target,
         transcript: [
-          'INITIAL INTERVIEW TRANSCRIPT',
-          initialTranscript,
+          buildApplicantEvidence(initialTranscript),
           '',
           'FOLLOW-UP INTERVIEW TRANSCRIPT',
           followupText,
@@ -1480,13 +2174,14 @@ async function regenerateResume(): Promise<void> {
       throw new Error(`${result.error || 'Generation failed.'}${detailText}`);
     }
 
-    lastUpdatedResumeMarkdown = (result as AiArtifacts).resumeMarkdown || '';
+    lastUpdatedResumeMarkdown = getResumeArtifactContent(result as AiArtifacts);
     renderDocumentOutput(updatedResumeOutput, lastUpdatedResumeMarkdown || EMPTY_RESUME_TEXT, EMPTY_RESUME_TEXT);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Generation failed.';
     lastUpdatedResumeMarkdown = '';
     renderDocumentOutput(updatedResumeOutput, `AI updated resume generation failed: ${message}`, EMPTY_RESUME_TEXT);
   } finally {
+    stopButtonTimer();
     regenerateResumeButton.textContent = 'Re-generate Resume';
     updateGeneratorState();
     updateExportState();
@@ -1499,7 +2194,7 @@ async function regenerateProfile(): Promise<void> {
   }
 
   regenerateProfileButton.disabled = true;
-  regenerateProfileButton.textContent = 'Re-generating Skill Profile...';
+  const stopButtonTimer = startButtonTimer(regenerateProfileButton, 'Re-generating Skill Profile...');
   updatedProfileOutput.className = 'profile-empty';
   updatedProfileOutput.textContent = 'Re-generating skill profile...';
 
@@ -1512,8 +2207,7 @@ async function regenerateProfile(): Promise<void> {
         candidateName: context.name,
         target: context.target,
         transcript: [
-          'INITIAL INTERVIEW TRANSCRIPT',
-          transcript.value.trim(),
+          buildApplicantEvidence(transcript.value.trim()),
           '',
           'FOLLOW-UP INTERVIEW TRANSCRIPT',
           followupTranscript.value.trim(),
@@ -1540,21 +2234,195 @@ async function regenerateProfile(): Promise<void> {
     updatedProfileOutput.className = 'profile-empty';
     updatedProfileOutput.textContent = `Updated skill profile generation failed: ${error instanceof Error ? error.message : 'Generation failed.'}`;
   } finally {
+    stopButtonTimer();
     regenerateProfileButton.textContent = 'Re-generate Skill Profile';
     updateGeneratorState();
     updateExportState();
   }
 }
 
-function renderDocumentOutput(element: HTMLDivElement, markdown: string, emptyText: string): void {
-  if (!markdown.trim() || markdown.trim() === emptyText) {
+async function regenerateCandidateProfile(): Promise<void> {
+  const initialTranscript = transcript.value.trim();
+  const followupText = followupTranscript.value.trim();
+  if (initialTranscript.length <= 40 || followupText.length <= 40) {
+    return;
+  }
+
+  regenerateCandidateProfileButton.disabled = true;
+  const stopButtonTimer = startButtonTimer(regenerateCandidateProfileButton, 'Re-generating Candidate Profile...');
+  renderDocumentOutput(updatedCandidateProfileOutput, 'Re-generating candidate profile...', EMPTY_CANDIDATE_PROFILE_TEXT);
+
+  try {
+    const context = readCandidateContext();
+    const response = await fetch('/api/generate-artifacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidateName: context.name,
+        target: context.target,
+        transcript: [
+          buildApplicantEvidence(initialTranscript),
+          '',
+          'FOLLOW-UP INTERVIEW TRANSCRIPT',
+          followupText,
+        ].join('\n'),
+        existingResume: lastUpdatedResumeMarkdown || lastResumeMarkdown,
+        mode: 'profile',
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      const detailText = Array.isArray(result.details) && result.details.length
+        ? `\n\n${result.details.join('\n')}`
+        : '';
+      throw new Error(`${result.error || 'Generation failed.'}${detailText}`);
+    }
+
+    renderCandidateProfile(result as AiArtifacts, updatedCandidateProfileOutput, true);
+  } catch (error) {
+    lastUpdatedCandidateProfileMarkdown = '';
+    renderDocumentOutput(
+      updatedCandidateProfileOutput,
+      `Updated candidate profile generation failed: ${error instanceof Error ? error.message : 'Generation failed.'}`,
+      EMPTY_CANDIDATE_PROFILE_TEXT,
+    );
+  } finally {
+    stopButtonTimer();
+    regenerateCandidateProfileButton.textContent = 'Re-generate Candidate Profile';
+    updateGeneratorState();
+    updateExportState();
+  }
+}
+
+function getResumeArtifactContent(artifacts: AiArtifacts): string {
+  return artifacts.resumeMarkdown || artifacts.resumeLatex || '';
+}
+
+function renderDocumentOutput(element: HTMLDivElement, content: string, emptyText: string): void {
+  if (!content.trim() || content.trim() === emptyText) {
     element.className = 'document-output empty-output';
     element.textContent = emptyText;
     return;
   }
 
   element.className = 'document-output';
-  element.innerHTML = markdownToDocumentHtml(markdown);
+  if (isLatexDocument(content)) {
+    element.innerHTML = renderLatexSourceHtml(content);
+    return;
+  }
+
+  element.innerHTML = `<div class="resume-preview">${markdownToDocumentHtml(content)}</div>`;
+}
+
+function isLatexDocument(content: string): boolean {
+  return /\\documentclass\b|\\begin\{document\}/.test(content);
+}
+
+function renderLatexSourceHtml(content: string): string {
+  return `
+    <div class="latex-output-note">
+      <strong>Resume preview</strong>
+      <span>Preview simulated from older LaTeX content. PDF export uses this formatted view.</span>
+    </div>
+    ${latexToResumePreviewHtml(content)}
+  `;
+}
+
+function latexToResumePreviewHtml(content: string): string {
+  const body = extractLatexBody(content);
+  const lines = body
+    .split('\n')
+    .flatMap((line) => expandLatexLine(line))
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const html: string[] = [];
+  let listOpen = false;
+
+  lines.forEach((line) => {
+    if (/^\\begin\{itemize\}/.test(line)) {
+      if (!listOpen) {
+        html.push('<ul>');
+        listOpen = true;
+      }
+      return;
+    }
+    if (/^\\end\{itemize\}/.test(line)) {
+      if (listOpen) {
+        html.push('</ul>');
+        listOpen = false;
+      }
+      return;
+    }
+
+    const sectionMatch = line.match(/^\\section\*?\{(.+)\}$/);
+    if (sectionMatch) {
+      if (listOpen) {
+        html.push('</ul>');
+        listOpen = false;
+      }
+      html.push(`<h3>${escapeHtml(cleanLatexText(sectionMatch[1]))}</h3>`);
+      return;
+    }
+
+    const itemMatch = line.match(/^\\item\s+(.+)$/);
+    if (itemMatch) {
+      if (!listOpen) {
+        html.push('<ul>');
+        listOpen = true;
+      }
+      html.push(`<li>${escapeHtml(cleanLatexText(itemMatch[1]))}</li>`);
+      return;
+    }
+
+    const cleaned = cleanLatexText(line);
+    if (!cleaned) return;
+
+    if (isLikelyResumeName(cleaned) && html.length === 0) {
+      html.push(`<h2>${escapeHtml(cleaned)}</h2>`);
+      return;
+    }
+
+    html.push(`<p>${escapeHtml(cleaned)}</p>`);
+  });
+
+  if (listOpen) {
+    html.push('</ul>');
+  }
+
+  return `<div class="latex-preview">${html.join('') || '<p>No previewable LaTeX content was found.</p>'}</div>`;
+}
+
+function extractLatexBody(content: string): string {
+  const match = content.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
+  return match ? match[1] : content;
+}
+
+function expandLatexLine(line: string): string[] {
+  return line
+    .replace(/\\\\/g, '\n')
+    .split('\n')
+    .map((part) => part.trim());
+}
+
+function cleanLatexText(value: string): string {
+  return value
+    .replace(/\\begin\{center\}|\\end\{center\}/g, '')
+    .replace(/\\(?:Large|LARGE|Huge|huge|textbf|textit)\{([^{}]*)\}/g, '$1')
+    .replace(/\{\\(?:Large|LARGE|Huge|huge|bfseries|itshape)\s+([^{}]*)\}/g, '$1')
+    .replace(/\\textbf\{([^{}]*)\}/g, '$1')
+    .replace(/\\textit\{([^{}]*)\}/g, '$1')
+    .replace(/\\vspace\{[^{}]*\}/g, '')
+    .replace(/\\href\{[^{}]*\}\{([^{}]*)\}/g, '$1')
+    .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{[^{}]*\})?/g, '')
+    .replace(/\\([#$%&_^{}])/g, '$1')
+    .replace(/[{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isLikelyResumeName(value: string): boolean {
+  return value.length <= 80 && !/[.!?:]$/.test(value) && value.split(/\s+/).length <= 6;
 }
 
 function markdownToDocumentHtml(markdown: string): string {
@@ -1601,6 +2469,16 @@ function markdownToDocumentHtml(markdown: string): string {
 
     if (!hasContent) {
       html.push(`<h3 class="doc-title">${formatInlineMarkdown(trimmed)}</h3>`);
+    } else if (isResumeContactLine(trimmed)) {
+      html.push(`<p class="doc-contact">${formatInlineMarkdown(trimmed)}</p>`);
+    } else if (isResumeDateRow(trimmed)) {
+      const [left, right] = splitResumeDateRow(trimmed);
+      html.push(`
+        <p class="doc-date-row">
+          <span>${formatInlineMarkdown(left)}</span>
+          <span>${formatInlineMarkdown(right)}</span>
+        </p>
+      `);
     } else if (isPlainSectionHeading(trimmed)) {
       html.push(`<h3 class="doc-section-title">${formatInlineMarkdown(trimmed)}</h3>`);
     } else {
@@ -1661,10 +2539,47 @@ function isPlainSectionHeading(value: string): boolean {
   );
 }
 
+function isResumeContactLine(value: string): boolean {
+  return /^(Email|Phone|Location|LinkedIn|GitHub|Portfolio|Website)\s*:/i.test(value);
+}
+
+function isResumeDateRow(value: string): boolean {
+  const parts = value.split('|').map((part) => part.trim()).filter(Boolean);
+  if (parts.length !== 2) {
+    return false;
+  }
+
+  return /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b|\b20\d{2}\b|\b19\d{2}\b|Present|Expected|Current)/i.test(parts[1]);
+}
+
+function splitResumeDateRow(value: string): [string, string] {
+  const separatorIndex = value.indexOf('|');
+  return [
+    value.slice(0, separatorIndex).trim(),
+    value.slice(separatorIndex + 1).trim(),
+  ];
+}
+
 function formatInlineMarkdown(value: string): string {
   return escapeHtml(value)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+function renderCandidateProfile(artifacts: AiArtifacts, targetOutput = profileOutput, isUpdated = false): void {
+  const content = artifacts.candidateProfileMarkdown?.trim()
+    || buildCandidateProfileMarkdown(artifacts.profileCards || [], readCandidateContext());
+
+  if (isUpdated) {
+    lastUpdatedCandidateProfileMarkdown = content;
+  } else if (targetOutput === candidateProfileOutput) {
+    lastCandidateProfileMarkdown = content;
+  } else {
+    lastProfileSignals = [];
+    lastProfileMarkdown = content;
+  }
+
+  renderDocumentOutput(targetOutput, content || EMPTY_PROFILE_TEXT, EMPTY_PROFILE_TEXT);
 }
 
 function renderAiProfile(cards: AiProfileCard[], targetOutput = profileOutput, isUpdated = false): void {
@@ -1709,9 +2624,16 @@ function renderAiProfile(cards: AiProfileCard[], targetOutput = profileOutput, i
 }
 
 function readCandidateContext(): CandidateContext {
+  const customCompany = customCompanyInput.value.trim();
+  const customJobDescription = customJobDescriptionInput.value.trim();
+  const customTarget = [
+    customCompany ? `Company\n${customCompany}` : '',
+    customJobDescription ? `Job Description\n${customJobDescription}` : '',
+  ].filter(Boolean).join('\n\n');
+
   return {
     name: applicantNameInput.value.trim(),
-    target: JOB_DESCRIPTION_CONTEXT,
+    target: activeContextMode === 'custom' ? customTarget : JOB_DESCRIPTION_CONTEXT,
   };
 }
 
@@ -1799,7 +2721,7 @@ function downloadResume(): void {
   if (!content.trim() || content.trim() === EMPTY_RESUME_TEXT) {
     return;
   }
-  downloadTextFile(content, `resume_${sessionSlug()}.md`, 'text/markdown');
+  saveResumeAsPdf(content);
 }
 
 function downloadUpdatedResume(): void {
@@ -1807,7 +2729,7 @@ function downloadUpdatedResume(): void {
   if (!content.trim() || content.trim() === EMPTY_RESUME_TEXT) {
     return;
   }
-  downloadTextFile(content, `resume_${sessionSlug()}.md`, 'text/markdown');
+  saveResumeAsPdf(content);
 }
 
 function downloadProfile(): void {
@@ -1818,12 +2740,48 @@ function downloadProfile(): void {
   downloadTextFile(content, `${sessionSlug()}-skill-profile.md`, 'text/markdown');
 }
 
+function downloadCandidateProfile(): void {
+  const content = lastCandidateProfileMarkdown;
+  if (!content.trim()) {
+    return;
+  }
+  downloadTextFile(content, `${sessionSlug()}-candidate-profile.md`, 'text/markdown');
+}
+
+function downloadTranscript(mode: RecordingMode): void {
+  const content = mode === 'followup' ? followupTranscript.value : transcript.value;
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return;
+  }
+
+  const suffix = mode === 'followup' ? 'follow-up-transcript' : 'transcript';
+  downloadTextFile(trimmed, `${sessionSlug()}-${suffix}.txt`, 'text/plain');
+}
+
+function downloadFeedback(): void {
+  const content = lastFeedbackText.trim();
+  if (!content) {
+    return;
+  }
+
+  downloadTextFile(content, `${sessionSlug()}-interview-feedback.md`, 'text/markdown');
+}
+
 function downloadUpdatedProfile(): void {
   const content = lastUpdatedProfileMarkdown;
   if (!content.trim()) {
     return;
   }
   downloadTextFile(content, `${sessionSlug()}-updated-skill-profile.md`, 'text/markdown');
+}
+
+function downloadUpdatedCandidateProfile(): void {
+  const content = lastUpdatedCandidateProfileMarkdown;
+  if (!content.trim()) {
+    return;
+  }
+  downloadTextFile(content, `${sessionSlug()}-updated-candidate-profile.md`, 'text/markdown');
 }
 
 function saveResumeAsPdf(content = lastUpdatedResumeMarkdown): void {
@@ -1847,34 +2805,70 @@ function saveResumeAsPdf(content = lastUpdatedResumeMarkdown): void {
         <title>${escapeHtml(filename)}</title>
         <style>
           body {
-            margin: 32px;
-            color: #17212b;
-            font-family: Arial, sans-serif;
-            line-height: 1.5;
+            margin: 0;
+            background: #ffffff;
+            color: #111827;
+            font-family: Georgia, "Times New Roman", serif;
+            line-height: 1.25;
+          }
+          .resume-paper {
+            max-width: 794px;
+            margin: 0 auto;
+            padding: 34px 34px;
+            font-size: 12.5px;
           }
           h3 {
-            margin: 20px 0 8px;
+            margin: 18px 0 8px;
           }
           .doc-title {
+            margin: 0 0 6px;
             font-size: 24px;
-            margin-top: 0;
+            font-weight: 900;
+            line-height: 1.1;
+            text-align: center;
+            text-transform: uppercase;
           }
           .doc-section-title {
-            border-bottom: 1px solid #94a3b8;
+            border-bottom: 1px solid #111827;
+            color: #111827;
+            display: block;
             font-size: 14px;
-            letter-spacing: 0.04em;
+            letter-spacing: 0;
+            line-height: 1.18;
+            padding: 0 12px 3px;
             text-transform: uppercase;
           }
           p {
-            margin: 8px 0;
+            margin: 0 0 6px;
+          }
+          .doc-contact {
+            margin: 0 0 2px;
+            text-align: center;
+          }
+          .doc-date-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            margin: 10px 0 1px;
+            font-weight: 700;
+          }
+          .doc-date-row span:last-child {
+            flex: 0 0 auto;
+            text-align: right;
+          }
+          ul {
+            margin: 0 0 6px;
+            padding-left: 17px;
           }
           li {
-            margin: 6px 0;
+            margin: 3px 0;
           }
         </style>
       </head>
       <body>
-        ${markdownToDocumentHtml(content)}
+        <div class="resume-paper">
+          ${isLatexDocument(content) ? latexToResumePreviewHtml(content) : markdownToDocumentHtml(content)}
+        </div>
         <script>
           window.addEventListener('load', function () {
             document.title = ${JSON.stringify(filename)};
@@ -1905,6 +2899,57 @@ function buildAiProfileMarkdown(cards: AiProfileCard[]): string {
       '',
     ]),
   ].join('\n');
+}
+
+function buildCandidateProfileMarkdown(cards: AiProfileCard[], context: CandidateContext): string {
+  if (!cards.length) {
+    return '';
+  }
+
+  const strongest = [...cards]
+    .sort((a, b) => (b.evidenceStrength || 0) - (a.evidenceStrength || 0))
+    .slice(0, 3);
+  const gaps = cards
+    .map((card) => card.gap?.trim())
+    .filter((gap): gap is string => Boolean(gap));
+
+  return [
+    `# Candidate Profile: ${context.name || 'Candidate'}`,
+    '',
+    '## Task Context',
+    '',
+    summarizeTargetContext(context.target),
+    '',
+    '## Best-Fit Strengths',
+    '',
+    ...(strongest.length
+      ? strongest.map((card) => `- **${card.label}:** ${(card.evidence || [])[0] || 'Relevant evidence should be reviewed.'}`)
+      : ['- Add stronger transcript evidence before identifying best-fit strengths.']),
+    '',
+    '## Evidence By Area',
+    '',
+    ...cards.flatMap((card) => [
+      `### ${card.label}`,
+      '',
+      `Evidence support: ${Math.max(0, Math.min(100, card.evidenceStrength || 0))}% AI estimate`,
+      '',
+      ...((card.evidence || []).length ? card.evidence.map((item) => `- ${item}`) : ['- No concrete evidence captured yet.']),
+      ...(card.gap ? [`- Gap to clarify: ${card.gap}`] : []),
+      '',
+    ]),
+    '## Gaps To Clarify',
+    '',
+    ...(gaps.length ? gaps.map((gap) => `- ${gap}`) : ['- No major gaps were returned, but review the transcript before relying on this profile.']),
+  ].join('\n');
+}
+
+function summarizeTargetContext(target: string): string {
+  const cleaned = target.replace(/\s+/g, ' ').trim();
+  if (!cleaned) {
+    return 'No task description was provided. Add a target task, hackathon, role, or opportunity description to make this profile more specific.';
+  }
+
+  return cleaned.length > 420 ? `${cleaned.slice(0, 417).trim()}...` : cleaned;
 }
 
 function buildProfileMarkdown(signals: SkillSignal[]): string {
@@ -2097,6 +3142,7 @@ async function copyUpdatedResume(): Promise<void> {
 function loadSampleTranscript(): void {
   recruiterNameInput.value = 'Recruiter';
   applicantNameInput.value = 'Daniel';
+  applicantInfoNameInput.value = 'Daniel';
   setTranscriptValue(`Interviewer: Tell me about yourself.
 Candidate: My name is Daniel. I enjoy building practical tools that help people work more clearly. I used Python and JavaScript for school projects, and I like explaining technical ideas to classmates.
 Interviewer: What are your strengths?
