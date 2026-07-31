@@ -79,8 +79,8 @@ type EvidenceGraph = {
   competencyMatches: CompetencyMatch[];
 };
 
-const LOGIN_USER = 'css';
-const LOGIN_PASSWORD = '12345678';
+const LOGIN_USER = import.meta.env.VITE_DEMO_LOGIN_USER || 'ite';
+const LOGIN_PASSWORD = import.meta.env.VITE_DEMO_LOGIN_PASSWORD || '987654321';
 const MAX_RECORDING_SECONDS = 10 * 60;
 const MAX_INLINE_AUDIO_BYTES = 18 * 1024 * 1024;
 const DEFAULT_QUESTIONS = [
@@ -152,11 +152,11 @@ function renderLanding(): string {
         <form class="login-form" id="login-form">
           <label>
             <span>Username</span>
-            <input id="login-username" type="text" autocomplete="username" placeholder="css" />
+            <input id="login-username" type="text" autocomplete="username" placeholder="Username" />
           </label>
           <label>
             <span>Password</span>
-            <input id="login-password" type="password" autocomplete="current-password" placeholder="12345678" />
+            <input id="login-password" type="password" autocomplete="current-password" placeholder="Password" />
           </label>
           <p class="form-message" id="login-message" role="alert"></p>
           <button class="primary action-button" type="submit">Login</button>
@@ -191,7 +191,7 @@ function renderWorkspace(): string {
             <p class="eyebrow">Regular Job Finder</p>
             <h1>Resume Builder</h1>
           </div>
-          <span class="status-pill">demo user: css</span>
+          <span class="status-pill">demo session active</span>
         </header>
         <section class="tab-stage">
           ${renderActivePanel()}
@@ -576,7 +576,7 @@ function bindLoginEvents(): void {
       return;
     }
 
-    message.textContent = 'Use css / 12345678 for this simulated login.';
+    message.textContent = 'Invalid username or password.';
     message.classList.add('is-error');
   });
 }
