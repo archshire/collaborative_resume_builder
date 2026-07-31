@@ -783,6 +783,64 @@ HOW to WHAT.
 
 The documentation set now has clearer separation of concerns: North Star explains why, Architecture explains the conceptual system, Technical Build explains how the implementation works, and KRYSTALIZE records the reasoning trail.
 
+### Session CJ-013 - LaTeX Resume Output
+
+```yaml
+session_id: CJ-013
+krystalize_session_id: KRYS-collaborative_resume_builder-001
+date: 2026-07-14
+participants:
+  - Builder
+  - Codex
+scope: resume artifact format refinement
+```
+
+#### Clarification Target
+
+Clarify whether the generated resume should remain a Markdown-style draft or move to LaTeX source.
+
+#### Reasoning Path Summary
+
+The builder asked whether Codex was familiar with LaTeX resume format, then requested that the generated resume be produced in LaTeX format. This changes the resume artifact from a browser-rendered Markdown-like document into a downloadable `.tex` source file.
+
+The backend generation contract now asks AI providers for:
+
+```json
+{
+  "resumeLatex": "..."
+}
+```
+
+The frontend renders the LaTeX source in a code-style preview and downloads resume artifacts as `.tex` files. PDF output is now understood as an external compilation step using standard LaTeX tooling such as `pdflatex`, `xelatex`, Overleaf, or another LaTeX editor.
+
+#### Ambiguity Severity
+
+Tier 3 - Output format and final artifact quality.
+
+#### Prioritization Rationale
+
+LaTeX better matches the goal of producing a professional resume artifact while preserving the lightweight local prototype. Compiling PDF internally would add a new dependency and infrastructure branch, so the current decision exports clean LaTeX source first.
+
+#### Traversal Layer
+
+WHAT to HOW.
+
+#### Locked Outcomes
+
+- Resume generation now targets LaTeX source.
+- The server validates `resumeLatex` while preserving fallback compatibility with older `resumeMarkdown` responses.
+- The frontend downloads resume artifacts as `.tex`.
+- PDF generation is external for now.
+
+#### Remaining Unresolved Issues
+
+- Whether future versions should compile LaTeX to PDF inside the app.
+- Whether a fixed LaTeX resume template should be versioned separately.
+
+#### Conversational Reflection Summary
+
+This change improves the seriousness of the final resume artifact without expanding the system into a full document-compilation platform.
+
 ## Clarification Rationale Tracking
 
 | ID | Session | Clarification Path | Severity Tier | Why Prioritized | Dependency Branch | Instability Trigger |
@@ -803,6 +861,7 @@ The documentation set now has clearer separation of concerns: North Star explain
 | CRT-014 | CJ-010 | Align README with standalone project expectations | Tier 3 | Prepare repository for project explanation and presentation. | Documentation | Builder requested README completion so the project could be understood independently. |
 | CRT-015 | CJ-011 | Rename repository identity to `collaborative_resume_builder` | Tier 2 | Remove mismatch between old listening-oriented working name and current 42 project-facing identity. | Product identity, repository traceability | Builder requested relevant file and directory names be changed from `earfully_resume` to `collaborative_resume_builder`. |
 | CRT-016 | CJ-012 | Add technical build documentation | Tier 3 | Explain how the frontend, backend, audio APIs, AI providers, and export flow work together. | Technical documentation | Builder asked whether any documentation explains how the tech stack works. |
+| CRT-017 | CJ-013 | Generate resume output as LaTeX source | Tier 3 | Produce a more professional resume artifact and make PDF compilation explicit. | Resume export | Builder asked for generated resumes to use LaTeX format. |
 
 ## Resolution Rationale
 
@@ -827,6 +886,7 @@ The documentation set now has clearer separation of concerns: North Star explain
 | RR-017 | README should explain the project as a standalone artifact. | clarified | The repository should show both the working prototype and the builder's ability to explain AI-assisted development. | Builder request | LT-022 |
 | RR-018 | Canonical repository identity is `collaborative_resume_builder`. | clarified | Directory, package, and constitutional artifact names should match the current product purpose and reduce reviewer confusion. | Builder clarification | LT-023 |
 | RR-019 | Technical stack explanation belongs in `docs/TECHNICAL_BUILD.md`. | clarified | README and architecture should stay readable; detailed runtime mechanics need a focused document. | Builder request | LT-024 |
+| RR-020 | Resume output should be LaTeX source. | clarified | LaTeX better matches professional resume formatting, while keeping the prototype simple by exporting `.tex` rather than compiling PDFs internally. | Builder clarification | LT-028 |
 
 ## Deferred Issues
 
@@ -863,6 +923,7 @@ The documentation set now has clearer separation of concerns: North Star explain
 | EKC-018 | 2026-07-10 | EK-018 | added | README should explain what the builder did and what AI did. | CJ-010 | active |
 | EKC-019 | 2026-07-10 | EK-019 | added | Naming is now consistent across directory, package, docs, and constitutional artifacts. | CJ-011 / RR-018 | active |
 | EKC-020 | 2026-07-10 | EK-020 | added | Technical build documentation now separates implementation mechanics from conceptual architecture. | CJ-012 / RR-019 | active |
+| EKC-021 | 2026-07-14 | EK-021 | added | Resume artifacts are now generated and downloaded as LaTeX source. | CJ-013 / RR-020 | active |
 
 ## Traceability Index
 
@@ -881,3 +942,43 @@ The documentation set now has clearer separation of concerns: North Star explain
 | TR-011 | CJ-010 | LT-022, EK-015, EK-018 | Builder request | README aligned to standalone project explanation and AI-assisted development explanation. |
 | TR-012 | CJ-011 | LT-023, EK-019 | Builder/Codex conversation | Directory, package metadata, README tree, and KRYSTALIZE artifact filenames renamed to `collaborative_resume_builder`. |
 | TR-013 | CJ-012 | LT-024, EK-020 | Builder/Codex conversation | `docs/TECHNICAL_BUILD.md` added and linked from README/Architecture. |
+| TR-014 | CJ-013 | LT-028, EK-021 | Builder/Codex conversation | Resume generation contract changed from Markdown-style drafts to downloadable LaTeX source. |
+
+## Current Branch Journal Addendum
+
+### CJ-014 - Regular Job Seeker Redesign And Evidence Engine Pivot
+
+| Field | Entry |
+| --- | --- |
+| Date | 2026-07-31 |
+| Branch | `resume_builder_by_42` |
+| Trigger | Builder wanted the new branch to target regular job seekers, add simulated login, redesign the layout with a left navigation workflow, and reason through safer resume generation. |
+| Decision | The active product should be treated as an evidence builder before it is treated as a resume generator. |
+| Rationale | Direct transcript-to-resume generation can produce polished unsupported claims. A structured evidence layer lets the app decide what is strong, weak, missing, reviewable, ignored, and traceable. |
+| Implementation Summary | Added a landing page with simulated login; converted the app to six tabs; added job link/document/image context intake; added applicant qualification fields; added text-answer paths for initial and follow-up questions; added a structured evidence graph; added weak/missing follow-up targeting; added evidence review and ignore/restore controls; added final evidence check; added resume evidence mapping. |
+| Architectural Result | `Job description + applicant data + interview/follow-up answers -> evidence graph -> resume/profile/follow-up/final evidence map`. |
+| Documentation Result | Added `docs/CURRENT_BUILD_SENSEMAKING.md`; updated README and technical build documentation to describe the current branch. |
+
+### RR-021 - Resume Builder Is Now Evidence-First
+
+| Field | Entry |
+| --- | --- |
+| Question | Should the app generate resumes directly from interview text? |
+| Resolution | No. The app should generate final resumes from structured evidence objects. |
+| Consequence | Resume generation receives an `evidenceGraph`; final bullets should map back to evidence IDs; unsupported bullets are rejected or flagged for review. |
+
+### RR-022 - Follow-up Questions Should Be Gap-Driven
+
+| Field | Entry |
+| --- | --- |
+| Question | What should Part 2 ask about? |
+| Resolution | Weak or missing competencies only. |
+| Consequence | Follow-up questions are selected from the evidence graph instead of being generic interview continuation prompts. |
+
+### RR-023 - Evidence Review Belongs Before Final Resume
+
+| Field | Entry |
+| --- | --- |
+| Question | How does the user control what evidence the AI can use? |
+| Resolution | Show evidence cards and allow ignore/restore controls. |
+| Consequence | Ignored evidence is excluded from active classification and final resume generation during the browser session. |

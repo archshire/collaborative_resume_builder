@@ -35,6 +35,20 @@ updated_at: 2026-07-10
 status: draft
 ```
 
+## Current Branch Addendum - Regular Job Seeker Evidence Builder
+
+As of the `resume_builder_by_42` branch, the active product direction has shifted from a 42 collaborative-resume helper into a regular job seeker resume builder.
+
+The older collaborative-resume documentation remains process history. The current branch should be understood as an evidence-builder prototype:
+
+```text
+Job description + candidate data + interview/follow-up answers
+-> structured evidence graph
+-> resume/profile/follow-up/final evidence map outputs
+```
+
+The product insight is that the resume is one output of the evidence graph, not the primary source-of-truth.
+
 ## KRYSTALIZE Session Start Summary
 
 The builder began with the intent to build the first individual-use Project Listen application: a resume interview assistant.
@@ -135,6 +149,13 @@ The application should demonstrate responsible AI-assisted development while pre
 | LT-025 | Resume/profile generation must be blocked when the transcript lacks applicant evidence. | Builder correction | 2026-07-10 | A test-only transcript caused generic resume hallucination; the backend now returns an insufficient-evidence artifact before calling AI providers. |
 | LT-026 | Transcription formatting must not invent interviewer questions. | Builder correction | 2026-07-10 | Speaker labels are normalized only when already present; the app no longer asks an AI formatter to infer missing interviewer questions from applicant replies. |
 | LT-027 | Candidate claims are not automatically evidence. | Builder correction | 2026-07-10 | Broad, absurd, irrelevant, or unbacked claims are blocked or treated as missing evidence rather than converted into resume bullets. |
+| LT-028 | Resume output should be generated as LaTeX source. | Builder clarification | 2026-07-14 | The resume artifact now targets a `.tex` workflow so the final PDF can be compiled with standard LaTeX tooling. |
+| LT-029 | The `resume_builder_by_42` branch targets regular job seekers rather than only 42 collaborative-resume students. | Builder clarification | 2026-07-31 | Earlier 42 framing remains process history; the active branch uses simulated login and a regular job-finder workflow. |
+| LT-030 | The app should be understood as an evidence builder before it is a resume generator. | Builder/ChatGPT/Codex sensemaking | 2026-07-31 | The structured evidence graph is the core product layer; resume, profile, and follow-up outputs are transformations of that graph. |
+| LT-031 | Final resume generation should use structured evidence objects as the authoritative source. | Builder/Codex phase work | 2026-07-31 | Raw transcripts and text answers are secondary context. Strong claims should come from high/medium evidence. |
+| LT-032 | Follow-up questions should target weak or missing competencies only. | Builder/Codex phase work | 2026-07-31 | Part 2 is now driven by evidence gaps rather than generic follow-up prompts. |
+| LT-033 | Users should be able to review and ignore evidence before final generation. | Builder/Codex phase work | 2026-07-31 | Ignored evidence is excluded from active classification and final resume generation during the browser session. |
+| LT-034 | Final resume bullets should be traceable to evidence. | Builder/Codex phase work | 2026-07-31 | The backend requests `resumeEvidenceMap`; Tab 6 shows Evidence Used and flags unmapped bullets. |
 
 ## Established Knowledge
 
@@ -160,6 +181,12 @@ The application should demonstrate responsible AI-assisted development while pre
 | EK-018 | Documentation should explain what the builder did and what AI did. | The project should be understandable as a product and as an AI-assisted build process. | README, presentation readiness | CJ-010 | active |
 | EK-019 | Naming should be consistent across product identity, directory, package metadata, and constitutional artifacts. | A reviewer should not have to reconcile `earfully_resume` paths with the current collaborative_resume-builder purpose. | Repository clarity, review readiness | CJ-011 / RR-018 | active |
 | EK-020 | The technical build should be documented separately from product architecture. | The architecture doc stabilizes conceptual structure; the technical build doc explains implementation data flow, endpoints, APIs, and limits. | Documentation, reviewer readiness | CJ-012 / RR-019 | active |
+| EK-021 | Resume artifacts are now LaTeX source, not Markdown resume drafts. | LaTeX provides cleaner resume typography and an explicit path to professional PDF output. | Resume generation, export | CJ-013 / LT-028 | active |
+| EK-022 | The current branch uses a six-step job-seeker workflow with simulated login. | The builder wanted to test one user first without real auth/database complexity. | UX, architecture | LT-029 | active |
+| EK-023 | Direct transcript-to-resume generation is no longer the desired architecture. | It risks polished but unsupported claims. | Generation, responsible AI | LT-030 / LT-031 | active |
+| EK-024 | The frontend evidence graph is currently the source-of-truth layer. | It makes evidence review, targeted follow-up, final readiness, and bullet traceability possible without adding a database yet. | Evidence engine | LT-030 | active |
+| EK-025 | Image uploads for job descriptions require classify-then-extract behavior. | A screenshot should be accepted only if it is a readable job posting; otherwise it should be discarded as not a job. | Context setting, backend AI | Builder request | active |
+| EK-026 | Resume output direction is now ATS-friendly hybrid resume, not decorative export-first LaTeX. | The target user is a regular job seeker; parseability and evidence-backed bullets matter more than visual flourish. | Resume format | Builder/Codex sensemaking | active |
 
 ## Dependency Map
 

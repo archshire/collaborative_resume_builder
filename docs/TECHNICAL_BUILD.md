@@ -1,10 +1,10 @@
-# collaborative_resume_builder Technical Build
+# Resume Builder Technical Build
 
 ## Purpose
 
-This document explains how the working prototype is assembled technically.
+This document explains how the current working prototype is assembled technically.
 
-The higher-level architecture explains the product idea. This document explains how the browser, local server, audio APIs, AI providers, and generated artifacts work together in the current build.
+The current branch is no longer just a transcript-to-resume prototype. It is an evidence-engine prototype for regular job seekers. The browser builds a structured evidence graph, the backend treats that graph as the authoritative source for generation, and the final resume is audited against evidence.
 
 ## Stack Summary
 
@@ -18,7 +18,29 @@ The higher-level architecture explains the product idea. This document explains 
 | Local backend | Node.js `http` server | Serves the built app and exposes AI endpoints. |
 | Transcription AI | Gemini first, OpenAI fallback | Converts uploaded audio into transcript text. |
 | Generation AI | Gemini first, OpenAI fallback | Generates resume/profile/feedback JSON from transcript evidence. |
-| Export | Browser downloads + print-to-PDF | Saves audio, Markdown artifacts, and final resume PDF locally. |
+| Evidence engine | TypeScript in `src/main.ts` | Converts job requirements and candidate data into structured evidence objects. |
+| Export / review | Browser-rendered artifacts | Shows resume, profiles, evidence review, final evidence check, and evidence used. |
+
+## Current Six-Step Workflow
+
+```text
+Landing / simulated login
+-> Context Setting
+-> Applicant Information
+-> Part 1 - Initial Interview
+-> Generate Resume / Skill Profile / Candidate Profile
+-> Part 2 - Interview Feedback and Follow-up Questions
+-> Generate Full Resume
+```
+
+The app uses simulated credentials only:
+
+```text
+username: css
+password: 12345678
+```
+
+There is no real account system or database yet.
 
 ## Runtime Modes
 
@@ -53,23 +75,18 @@ For a standalone reviewer-friendly HTML version of this flow, open `docs/collabo
 
 ```text
 Browser UI
--> microphone permission
--> MediaRecorder audio Blob
--> recording list
--> user downloads audio OR sends it for transcription
--> frontend converts Blob to base64
--> POST /api/transcribe
--> local backend tries Gemini, then OpenAI
--> transcript returns to browser
--> browser inserts transcript into editable transcript box
--> user generates resume/profile
--> POST /api/generate-artifacts
--> local backend tries Gemini, then OpenAI
--> structured JSON returns to browser
--> browser renders resume, skill profile, feedback, and follow-up questions
--> Part 2 records follow-up answers
--> updated resume/profile generated from combined evidence
--> final resume saved through browser print-to-PDF
+-> job context by link, document, image, or manual paste
+-> applicant information and qualifications
+-> interview recording/transcription or per-question text answers
+-> frontend builds structured evidence graph
+-> POST /api/generate-artifacts with evidenceGraph
+-> backend treats evidenceGraph as authoritative
+-> resume/profile/feedback/follow-up JSON returns
+-> user reviews and ignores evidence if needed
+-> Part 2 follow-up questions target weak/missing competencies
+-> frontend rebuilds evidence graph with follow-up answers
+-> final resume generated from high/medium evidence
+-> Evidence Used panel maps bullets back to evidence objects
 ```
 
 ### Flow Diagram
@@ -120,7 +137,7 @@ flowchart TD
   AB --> AC[Combine initial transcript, first resume, and follow-up transcript]
   AC --> AD[Re-generate updated resume]
   AD --> AE[Re-generate updated skill profile]
-  AE --> AF[Save final resume through browser print-to-PDF]
+  AE --> AF[Download final resume as LaTeX source]
 ```
 
 ## Frontend Build
@@ -145,6 +162,46 @@ The app is intentionally lightweight:
 - no committed secrets.
 
 This keeps the prototype explainable for review and easy to run locally.
+
+## Structured Evidence Engine
+
+The current build creates an evidence graph in the frontend before calling the generation endpoint.
+
+```ts
+type EvidenceObject = {
+  id: string;
+  competency: string;
+  supportingQuote: string;
+  source: EvidenceSource;
+  confidence: number;
+  quantifiedValues: string[];
+  relatedJob: string;
+};
+```
+
+Evidence sources include:
+
+- applicant information;
+- qualifications;
+- initial interview transcript;
+- per-question text answers;
+- follow-up transcript;
+- follow-up text answers.
+
+The graph also includes:
+
+- parsed job requirements;
+- competency matches;
+- strength classification as High Evidence, Medium Evidence, Weak Evidence, or Missing.
+
+The frontend uses the graph for:
+
+- Structured Evidence Review in Tab 4;
+- weak/missing follow-up question generation in Tab 5;
+- Final Evidence Check in Tab 6;
+- Evidence Used mapping under the final resume.
+
+Ignored evidence IDs are stored in browser session storage and excluded from active graph classification and final resume generation.
 
 ## Browser Audio Layer
 
@@ -306,8 +363,8 @@ Backend behavior:
 
 1. Validate that audio data exists.
 2. Build a strict transcription prompt.
-3. Try Gemini if `GEMINI_API_KEY` exists.
-4. If Gemini fails, try OpenAI if `OPENAI_API_KEY` exists.
+3. Try Gemini if `GEMINI_API_KEY` exists and the MIME type is Gemini-supported.
+4. If Gemini is skipped or fails, try OpenAI if `OPENAI_API_KEY` exists.
 5. Ask the formatting helper to preserve speaker labels.
 6. Return transcript text and provider name.
 7. If all providers fail, return a structured error with details.
@@ -322,6 +379,38 @@ The transcription prompt explicitly says:
 - use speaker labels where possible.
 
 This prompt exists because earlier transcription attempts produced AI-written answers instead of actual transcription.
+
+Gemini does not support every browser recording MIME type. The frontend now prefers OGG/Opus where possible, and the backend skips Gemini for unsupported MIME types such as WebM instead of making a doomed provider call.
+
+## `/api/extract-job-document`
+
+Purpose:
+
+```text
+uploaded job file or image -> job context
+```
+
+The upload accepts text-like files and images.
+
+For text-like files, the backend checks whether the content looks like a job posting before extraction.
+
+For images, the backend uses AI vision/OCR where configured:
+
+```json
+{
+  "name": "job-screenshot.png",
+  "mimeType": "image/png",
+  "data": "base64-image-data"
+}
+```
+
+If the image is not a job description, the backend returns:
+
+```json
+{
+  "status": "not_job"
+}
+```
 
 ## `/api/generate-artifacts`
 
@@ -340,6 +429,11 @@ Request body for resume generation:
   "candidateName": "AK",
   "target": "job description text",
   "transcript": "interview transcript",
+  "evidenceGraph": {
+    "jobRequirements": [],
+    "evidenceObjects": [],
+    "competencyMatches": []
+  },
   "existingResume": "optional previous draft",
   "mode": "resume"
 }
@@ -352,6 +446,11 @@ Request body for profile generation:
   "candidateName": "AK",
   "target": "job description text",
   "transcript": "interview transcript",
+  "evidenceGraph": {
+    "jobRequirements": [],
+    "evidenceObjects": [],
+    "competencyMatches": []
+  },
   "existingResume": "optional updated resume",
   "mode": "profile"
 }
@@ -362,7 +461,8 @@ Backend behavior:
 1. Validate transcript exists.
 2. Run the local candidate-evidence gate.
 3. If applicant evidence is insufficient, return an insufficient-evidence artifact.
-4. Build an evidence-governed prompt.
+4. Sanitize the evidence graph.
+5. Build an evidence-governed prompt.
 5. Try Gemini if configured.
 6. If Gemini fails, try OpenAI if configured.
 7. Parse model output as JSON.
@@ -371,12 +471,15 @@ Backend behavior:
 
 The prompt tells the model:
 
-- use transcript as the only source for candidate claims;
+- treat the structured evidence graph as authoritative when present;
+- use raw transcript only as secondary context;
 - use job description only for fit and gaps;
 - do not invent skills, dates, tools, experience, or achievements;
 - distinguish unsupported claims from backed evidence;
 - reject irrelevant, joking, absurd, manipulative, or non-work-related claims as resume evidence;
 - ask follow-up questions when evidence is missing.
+
+The backend also validates resume output against the evidence graph. Unsupported bullets and invalid evidence mappings can cause provider output to be rejected.
 
 The transcription formatter is deliberately conservative. It normalizes speaker labels that already exist, but it does not ask an AI model to invent interviewer questions or reconstruct missing speaker turns from applicant answers.
 
@@ -388,16 +491,26 @@ The backend has two modes.
 
 ```json
 {
-  "resumeMarkdown": "..."
+  "resumeMarkdown": "...",
+  "resumeEvidenceMap": [
+    {
+      "resumeBullet": "Built a customer dashboard using React...",
+      "evidenceIds": ["ev_abc123"],
+      "competency": "Technical execution",
+      "source": "initial_interview",
+      "confidence": 0.82
+    }
+  ]
 }
 ```
 
-The frontend renders this Markdown-like text into a styled document panel.
+The frontend renders the resume and, in Tab 6, shows an Evidence Used section that maps bullets back to evidence objects.
 
-Part 2 resume regeneration sends:
+Final resume generation sends:
 
-- the initial transcript;
-- the follow-up transcript;
+- the rebuilt evidence graph including follow-up answers;
+- the initial transcript/text answers;
+- follow-up transcript/text answers;
 - the existing first resume draft.
 
 The existing resume is treated as a draft to revise, not as independent evidence.
@@ -426,6 +539,8 @@ The frontend renders:
 - missing-evidence gaps;
 - interview feedback;
 - follow-up questions.
+
+Follow-up questions should target only weak or missing competencies from the evidence graph.
 
 ## How Skill Profile Evidence Strength Works
 
@@ -483,6 +598,28 @@ Ready to ask follow-up questions
 
 The follow-up recorder is blocked until the user clicks this button. This nudges the user to review the AI feedback before recording more audio.
 
+## Evidence Traceability Layer
+
+Phase 6 adds resume bullet traceability.
+
+The model is asked to return `resumeEvidenceMap`, and the backend validates:
+
+- a mapping exists;
+- evidence IDs are real;
+- most resume bullets have evidence mappings.
+
+The frontend also builds a local fallback mapping by comparing resume bullets to evidence objects. Unmapped bullets appear as `Needs Review`.
+
+This makes the final resume auditable:
+
+```text
+Resume bullet
+-> evidence object ID
+-> supporting quote
+-> source
+-> confidence
+```
+
 ## Export Layer
 
 ### Audio Export
@@ -491,20 +628,15 @@ Recordings are stored in browser memory as `Blob` objects and exposed through lo
 
 The download icon saves the audio file locally.
 
-### Markdown Export
+### LaTeX and Markdown Export
 
-Resume and skill profile text can be downloaded as Markdown files.
+Resume output is currently rendered in the browser and can be printed from the final resume tab.
+
+Skill profile text can be downloaded as a Markdown file.
 
 ### PDF Export
 
-The final Part 2 resume uses a browser print flow:
-
-1. open a temporary print window;
-2. render the generated resume HTML;
-3. call `window.print()`;
-4. user saves as PDF from the browser print dialog.
-
-The app does not yet use a PDF generation library.
+The app does not yet provide a polished PDF export pipeline for the new job-seeker branch. The recommended resume output direction is ATS-friendly Markdown/HTML rendered as a clean printable document.
 
 ## Why No Database Yet?
 
@@ -516,8 +648,9 @@ Local files are enough for the current flow:
 
 - downloaded audio files;
 - transcript text in the browser;
-- downloaded Markdown artifacts;
-- final browser-generated PDF.
+- downloaded LaTeX resume source;
+- downloaded Markdown skill-profile artifacts;
+- final PDF generated externally from the LaTeX source.
 
 Google Drive, Google Docs, or database storage can be added later after the local workflow is reliable.
 
@@ -528,7 +661,7 @@ Google Drive, Google Docs, or database storage can be added later after the loca
 | Audio is sent inline as base64 JSON. | Simpler local prototype. | Use provider file-upload APIs for larger audio. |
 | API reliability depends on provider quota and MIME support. | External service constraint. | Add clearer provider status and retry handling. |
 | No automated tests yet. | Prototype iteration moved quickly. | Add backend endpoint tests and frontend smoke tests. |
-| PDF export uses browser print. | Avoids adding PDF dependencies early. | Add a PDF library or server-side PDF rendering. |
+| PDF compilation is external. | The app now exports LaTeX source rather than compiling PDFs locally. | Add a LaTeX compilation service or local PDF renderer later. |
 | No Google Docs export. | OAuth and Docs formatting are deferred. | Add Google login and Docs API integration later. |
 | No database/session persistence. | Keeps privacy and implementation scope simple. | Add explicit save/load only if the workflow needs it. |
 
@@ -552,4 +685,4 @@ Manual browser verification is still required for:
 - recording stop/save behavior;
 - transcription provider behavior;
 - AI generation quality;
-- PDF print flow.
+- LaTeX export and external PDF compilation flow.

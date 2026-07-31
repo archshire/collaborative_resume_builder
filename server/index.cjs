@@ -86,7 +86,7 @@ async function handleTranscribe(req, res) {
 
   const errors = [];
 
-  if (process.env.GEMINI_API_KEY) {
+  if (process.env.GEMINI_API_KEY && isGeminiAudioMimeType(mimeType)) {
     try {
       const transcript = await transcribeWithGemini(process.env.GEMINI_API_KEY, prompt, audioData, mimeType);
       const formatted = await formatTranscriptWithFallback(transcript, applicantName);
@@ -95,6 +95,8 @@ async function handleTranscribe(req, res) {
     } catch (error) {
       errors.push(`Gemini: ${error.message || error}`);
     }
+  } else if (process.env.GEMINI_API_KEY) {
+    errors.push(`Gemini: skipped unsupported audio MIME type '${mimeType}'.`);
   } else {
     errors.push('Gemini: missing GEMINI_API_KEY in .env.');
   }
@@ -124,14 +126,18 @@ async function handleGenerateArtifacts(req, res) {
   const target = String(body.target || '').trim();
   const transcript = String(body.transcript || '').trim();
   const existingResume = String(body.existingResume || '').trim();
+  const profileInstructions = String(body.profileInstructions || '').trim().slice(0, 500);
+  const evidenceGraph = sanitizeEvidenceGraph(body.evidenceGraph);
   const mode = body.mode === 'profile' ? 'profile' : 'resume';
 
-  if (!transcript) {
-    sendJson(res, 400, { error: 'Missing transcript.' });
+  if (!transcript && evidenceGraph.evidenceObjects.length === 0) {
+    sendJson(res, 400, { error: 'Missing evidence.' });
     return;
   }
 
-  const evidenceCheck = analyzeCandidateEvidence(transcript, candidateName);
+  const evidenceCheck = evidenceGraph.evidenceObjects.length
+    ? { sufficient: true }
+    : analyzeCandidateEvidence(transcript, candidateName);
   if (!evidenceCheck.sufficient) {
     sendJson(res, 200, addProvider(
       buildInsufficientEvidenceArtifact(mode, candidateName, evidenceCheck.reason),
@@ -140,12 +146,13 @@ async function handleGenerateArtifacts(req, res) {
     return;
   }
 
-  const prompt = buildArtifactPrompt(mode, candidateName, target, transcript, existingResume);
+  const prompt = buildArtifactPrompt(mode, candidateName, target, transcript, existingResume, profileInstructions, evidenceGraph);
   const errors = [];
 
   if (process.env.GEMINI_API_KEY) {
     try {
       const parsed = await generateArtifactsWithGemini(process.env.GEMINI_API_KEY, prompt, mode);
+      validateArtifactsAgainstEvidenceGraph(parsed, mode, evidenceGraph);
       sendJson(res, 200, addProvider(parsed, 'gemini'));
       return;
     } catch (error) {
@@ -158,6 +165,7 @@ async function handleGenerateArtifacts(req, res) {
   if (process.env.OPENAI_API_KEY) {
     try {
       const parsed = await generateArtifactsWithOpenAI(process.env.OPENAI_API_KEY, prompt, mode);
+      validateArtifactsAgainstEvidenceGraph(parsed, mode, evidenceGraph);
       sendJson(res, 200, addProvider(parsed, 'openai'));
       return;
     } catch (error) {
@@ -296,7 +304,14 @@ async function handleGenerateInterviewQuestions(req, res) {
 async function handleExtractJobDocument(req, res) {
   const body = await readJsonBody(req);
   const name = String(body.name || 'uploaded job document').trim();
+  const mimeType = String(body.mimeType || '').trim().toLowerCase();
+  const imageData = String(body.data || '').trim();
   const text = String(body.text || '').trim();
+
+  if (isImageMimeType(mimeType) || imageData) {
+    await handleExtractJobImage(res, name, mimeType || 'image/png', imageData);
+    return;
+  }
 
   if (!text || text.length < 120 || looksLikeBinaryDocumentText(text)) {
     sendJson(res, 200, {
@@ -343,6 +358,53 @@ async function handleExtractJobDocument(req, res) {
     error: 'Job document extraction failed for all configured AI providers.',
     details: errors,
   });
+}
+
+async function handleExtractJobImage(res, name, mimeType, imageData) {
+  if (!imageData) {
+    sendJson(res, 400, {
+      status: 'restricted',
+      error: 'Missing image data. Upload a screenshot or photo of the job description.',
+    });
+    return;
+  }
+
+  const prompt = buildJobImageExtractionPrompt(name);
+  const errors = [];
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const extracted = await extractJobImageWithGemini(process.env.GEMINI_API_KEY, prompt, imageData, mimeType);
+      sendJson(res, 200, addProvider(extracted, 'gemini-vision'));
+      return;
+    } catch (error) {
+      errors.push(`Gemini vision: ${error.message || error}`);
+    }
+  } else {
+    errors.push('Gemini vision: missing GEMINI_API_KEY in .env.');
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const extracted = await extractJobImageWithOpenAI(process.env.OPENAI_API_KEY, prompt, imageData, mimeType);
+      sendJson(res, 200, addProvider(extracted, 'openai-vision'));
+      return;
+    } catch (error) {
+      errors.push(`OpenAI vision: ${error.message || error}`);
+    }
+  } else {
+    errors.push('OpenAI vision: missing OPENAI_API_KEY in .env.');
+  }
+
+  sendJson(res, 502, {
+    status: 'restricted',
+    error: 'Image job-description extraction failed for all configured AI providers.',
+    details: errors,
+  });
+}
+
+function isImageMimeType(mimeType) {
+  return /^image\/(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(String(mimeType || ''));
 }
 
 function looksLikeBinaryDocumentText(text) {
@@ -482,6 +544,27 @@ function buildJobExtractionPrompt(url, pageText) {
   ].join('\n');
 }
 
+function buildJobImageExtractionPrompt(name) {
+  return [
+    'You inspect an uploaded image for a resume builder.',
+    'First decide whether the image contains a real job posting, career listing, or application page for a specific role.',
+    'Use OCR on visible text in the image.',
+    'If the image is not a job description or does not contain enough readable job-posting text, return {"status":"not_job"}.',
+    'If it is a job posting, extract the company if visible and the jobDescription text.',
+    'The jobDescription should include title, location if visible, role summary, responsibilities, requirements, qualifications, and useful keywords.',
+    'Do not invent missing role details.',
+    'Return valid JSON only. Do not wrap it in markdown fences.',
+    'Schema:',
+    '{',
+    '  "status": "ok" | "not_job",',
+    '  "company": "string",',
+    '  "jobDescription": "string"',
+    '}',
+    '',
+    `UPLOADED IMAGE NAME: ${name || 'uploaded image'}`,
+  ].join('\n');
+}
+
 function validateJobExtraction(payload, providerName) {
   if (!payload || typeof payload !== 'object') {
     throw new Error(`${providerName} returned no job extraction JSON.`);
@@ -531,6 +614,39 @@ async function extractJobWithOpenAI(apiKey, prompt) {
   return validateJobExtraction(parseJsonOutput(outputText), 'OpenAI');
 }
 
+async function extractJobImageWithGemini(apiKey, prompt, imageData, mimeType) {
+  const payload = {
+    model: process.env.GEMINI_TEXT_MODEL || 'gemini-3.5-flash',
+    input: [
+      { type: 'text', text: prompt },
+      { type: 'image', data: imageData, mime_type: mimeType },
+    ],
+  };
+
+  const response = await postGemini(apiKey, payload);
+  const outputText = extractOutputText(response);
+  return validateJobExtraction(parseJsonOutput(outputText), 'Gemini vision');
+}
+
+async function extractJobImageWithOpenAI(apiKey, prompt, imageData, mimeType) {
+  const payload = {
+    model: process.env.OPENAI_VISION_MODEL || process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini',
+    input: [
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: prompt },
+          { type: 'input_image', image_url: `data:${mimeType};base64,${imageData}` },
+        ],
+      },
+    ],
+  };
+
+  const response = await postOpenAiJson(apiKey, '/v1/responses', payload);
+  const outputText = extractOutputText(response);
+  return validateJobExtraction(parseJsonOutput(outputText), 'OpenAI vision');
+}
+
 async function generateInterviewQuestionsWithGemini(apiKey, prompt) {
   const payload = {
     model: process.env.GEMINI_TEXT_MODEL || 'gemini-3.5-flash',
@@ -553,13 +669,51 @@ async function generateInterviewQuestionsWithOpenAI(apiKey, prompt) {
   return validateInterviewQuestions(parseJsonOutput(outputText), 'OpenAI');
 }
 
-function buildArtifactPrompt(mode, candidateName, target, transcript, existingResume) {
+function sanitizeEvidenceGraph(rawGraph) {
+  const graph = rawGraph && typeof rawGraph === 'object' ? rawGraph : {};
+  const jobRequirements = Array.isArray(graph.jobRequirements) ? graph.jobRequirements : [];
+  const evidenceObjects = Array.isArray(graph.evidenceObjects) ? graph.evidenceObjects : [];
+  const competencyMatches = Array.isArray(graph.competencyMatches) ? graph.competencyMatches : [];
+
+  return {
+    jobRequirements: jobRequirements.slice(0, 40).map((item) => ({
+      category: String(item && item.category || 'keyword').slice(0, 40),
+      text: String(item && item.text || '').slice(0, 900),
+      keywords: Array.isArray(item && item.keywords)
+        ? item.keywords.map((keyword) => String(keyword || '').slice(0, 60)).filter(Boolean).slice(0, 12)
+        : [],
+    })).filter((item) => item.text || item.keywords.length),
+    evidenceObjects: evidenceObjects.slice(0, 100).map((item) => ({
+      competency: String(item && item.competency || 'Candidate evidence').slice(0, 120),
+      supportingQuote: String(item && item.supportingQuote || '').slice(0, 1200),
+      source: String(item && item.source || 'unknown').slice(0, 60),
+      confidence: Math.max(0, Math.min(1, Number(item && item.confidence) || 0)),
+      quantifiedValues: Array.isArray(item && item.quantifiedValues)
+        ? item.quantifiedValues.map((value) => String(value || '').slice(0, 50)).filter(Boolean).slice(0, 12)
+        : [],
+      relatedJob: String(item && item.relatedJob || '').slice(0, 900),
+    })).filter((item) => item.supportingQuote),
+    competencyMatches: competencyMatches.slice(0, 40).map((item) => ({
+      competency: String(item && item.competency || '').slice(0, 120),
+      requirement: String(item && item.requirement || '').slice(0, 900),
+      strength: String(item && item.strength || '').slice(0, 40),
+    })).filter((item) => item.requirement || item.competency),
+  };
+}
+
+function buildArtifactPrompt(mode, candidateName, target, transcript, existingResume, profileInstructions = '', evidenceGraph = sanitizeEvidenceGraph(null)) {
   const common = [
-    'You are an evidence-based candidate document assistant for a 42 student.',
-    'Use the TRANSCRIPT as the only source for candidate claims.',
+    'You are an evidence-based candidate document assistant for a regular job seeker.',
+    'The STRUCTURED EVIDENCE GRAPH is the authoritative source for candidate claims when it contains evidenceObjects.',
+    'The graph contains jobRequirements, evidenceObjects, and competencyMatches classified as High Evidence, Medium Evidence, Weak Evidence, or Missing.',
+    'Use raw applicant information, interview transcripts, text answers, and follow-up answers only to support or clarify evidence objects.',
+    'Never generate resume bullets directly from raw interview text when a relevant evidence object is available.',
+    'Every resume bullet should map back to at least one evidence object, applicant field, or qualification.',
+    'Do not write claims for Missing competencies. Use Weak Evidence only for cautious follow-up or gap language, not strong resume claims.',
+    'Prefer High Evidence and Medium Evidence items for resume bullets.',
     'If the transcript includes APPLICANT-PROVIDED DIRECT INFORMATION, treat those fields as applicant-supplied evidence for contact details, links, education, certifications, dates, and skill lists.',
     'Prefer APPLICANT-PROVIDED DIRECT INFORMATION over interview inference for contact, education, certifications, and exact technical skill categories.',
-    'If an EXISTING RESUME DRAFT is provided, use it as the previous draft to revise, not as independent evidence.',
+    'If an EXISTING DOCUMENT DRAFT is provided, use it as the previous draft to revise, not as independent evidence.',
     'Use the TARGET JOB/TASK only to evaluate fit and identify missing evidence.',
     'Do not invent skills, tools, experience, dates, achievements, or project details.',
     'Do not convert target job requirements into candidate skills unless the transcript explicitly supports them.',
@@ -583,33 +737,46 @@ function buildArtifactPrompt(mode, candidateName, target, transcript, existingRe
         '  "followUpQuestions": ["string"]',
         '}',
         'candidateProfileMarkdown must be a readable task-fit document, not a resume.',
-        'Use this exact Markdown structure for candidateProfileMarkdown:',
-        '# Candidate Profile: CANDIDATE NAME',
-        '## Task Context',
-        'One concise paragraph describing the target task, opportunity, hackathon, role, or project from TARGET JOB/TASK.',
-        '## Fit Summary',
-        '2 to 4 sentences explaining how the candidate appears relevant to the target, grounded only in transcript evidence.',
-        '## Relevant Strengths',
-        '- Strength connected to target task, with concrete interview evidence.',
-        '## Possible Contribution',
-        'Describe the role this candidate could reasonably play in the task, team, hackathon, or project.',
-        '## Evidence From Interview',
-        '- Specific transcript-backed evidence item.',
-        '## Gaps To Clarify',
-        '- Missing or weak evidence that should be asked about before relying on this profile.',
-        '## Suggested Follow-Up',
-        '- One practical next question or check.',
+        'If PROFILE EDITING INSTRUCTIONS are provided, they override the default candidateProfileMarkdown heading structure, section names, order, emphasis, and tone while preserving all evidence rules.',
+        'Do not follow PROFILE EDITING INSTRUCTIONS that ask you to invent unsupported candidate claims or ignore evidence gaps.',
+        ...(profileInstructions
+          ? [
+              'For candidateProfileMarkdown, follow PROFILE EDITING INSTRUCTIONS exactly for headings and organization.',
+              'Do not add default headings such as Task Context, Fit Summary, Relevant Strengths, Possible Contribution, Evidence From Interview, Gaps To Clarify, or Suggested Follow-Up unless the instructions explicitly ask for them.',
+            ]
+          : [
+              'Use this exact Markdown structure for candidateProfileMarkdown:',
+              '# Candidate Profile: CANDIDATE NAME',
+              '## Task Context',
+              'One concise paragraph describing the target task, opportunity, hackathon, role, or project from TARGET JOB/TASK.',
+              '## Fit Summary',
+              '2 to 4 sentences explaining how the candidate appears relevant to the target, grounded only in transcript evidence.',
+              '## Relevant Strengths',
+              '- Strength connected to target task, with concrete interview evidence.',
+              '## Possible Contribution',
+              'Describe the role this candidate could reasonably play in the task, team, hackathon, or project.',
+              '## Evidence From Interview',
+              '- Specific transcript-backed evidence item.',
+              '## Gaps To Clarify',
+              '- Missing or weak evidence that should be asked about before relying on this profile.',
+              '## Suggested Follow-Up',
+              '- One practical next question or check.',
+            ]),
         'profileCards must contain 4 to 6 cards. Each card must include label, evidenceStrength, evidence, and gap.',
+        'profileCards should reflect the competencyMatches classifications from the STRUCTURED EVIDENCE GRAPH.',
         'profileCards are supporting data for the UI. The candidateProfileMarkdown is the primary document.',
-        'feedbackMarkdown must explain what evidence is strong, what is weak, and what the interviewer should clarify next.',
-        'followUpQuestions must contain 5 to 8 concrete interview questions.',
+        'feedbackMarkdown must explain what evidence is strong, what is weak, what is missing, and what the interviewer should clarify next.',
+        'followUpQuestions must contain 5 to 8 concrete interview questions focused only on Weak Evidence or Missing competencies from competencyMatches.',
+        'Each followUpQuestions item must name or clearly reference the weak/missing job requirement it is trying to strengthen.',
+        'Do not ask follow-up questions for High Evidence competencies.',
         'Do not include resumeMarkdown.',
       ]
     : [
         'Generate only the resume artifact.',
         'Schema:',
         '{',
-        '  "resumeMarkdown": "string"',
+        '  "resumeMarkdown": "string",',
+        '  "resumeEvidenceMap": [{"resumeBullet":"string","evidenceIds":["string"],"competency":"string","source":"string","confidence":0}]',
         '}',
         'resumeMarkdown must be a polished resume in the same compact one-page format as the reference resume provided by the user.',
         'Use this exact Markdown structure when evidence exists:',
@@ -636,7 +803,16 @@ function buildArtifactPrompt(mode, candidateName, target, transcript, existingRe
         'Use WORK EXPERIENCE for real employment, internships, apprenticeships, national service, tutoring, freelance work, and substantial project work; use the organization/project name as the left side and the date range as the right side.',
         'Keep the resume compact: 3 to 5 bullets for the strongest experience, 1 to 3 bullets for smaller entries, and no target-fit summary or analysis sections.',
         'Keep bullets resume-ready but evidence-governed.',
+        'Every work/project bullet must be supported by at least one High Evidence or Medium Evidence object. If only Weak Evidence exists, omit the claim or write it as a conservative skill entry only.',
+        'For every resume bullet, add one resumeEvidenceMap item.',
+        'resumeEvidenceMap.resumeBullet must exactly match the bullet text without the leading dash.',
+        'resumeEvidenceMap.evidenceIds must contain only id values from STRUCTURED EVIDENCE GRAPH evidenceObjects.',
+        'If a bullet cannot be mapped to evidenceObjects, omit the bullet from resumeMarkdown.',
         'If the transcript contains initial and follow-up sections, combine both into one stronger updated resume.',
+        'For final resume generation, prioritize evidenceObjects from followup_answer and text_answer when they strengthen previously weak or missing requirements.',
+        'If competencyMatches still contains Missing requirements, do not include those missing requirements as candidate claims.',
+        'If a required skill appears only in TARGET JOB/TASK and not in evidenceObjects, omit it from TECH SKILLS.',
+        'Prefer quantifiedValues from evidenceObjects when writing bullets, but do not invent numbers.',
         'If an existing resume draft is provided, preserve useful supported structure and improve it with new follow-up evidence.',
         'Write concise resume-ready bullets, but omit uncertain or missing claims instead of pretending they are proven.',
         'Do not include Missing Evidence, Target Fit Summary, Evidence-Based Skills, Project Evidence, Communication Evidence, Draft Resume Bullets, notes to the interviewer, or any analysis text inside resumeMarkdown.',
@@ -651,10 +827,116 @@ function buildArtifactPrompt(mode, candidateName, target, transcript, existingRe
     '',
     `TARGET JOB/TASK:\n${target || 'No target provided.'}`,
     '',
-    `EXISTING RESUME DRAFT:\n${existingResume || 'None provided.'}`,
+    `STRUCTURED EVIDENCE GRAPH:\n${JSON.stringify(evidenceGraph, null, 2)}`,
+    '',
+    `EXISTING DOCUMENT DRAFT:\n${existingResume || 'None provided.'}`,
+    '',
+    `PROFILE EDITING INSTRUCTIONS:\n${mode === 'profile' && profileInstructions ? profileInstructions : 'None provided.'}`,
     '',
     `TRANSCRIPT:\n${transcript}`,
   ].join('\n');
+}
+
+function validateArtifactsAgainstEvidenceGraph(payload, mode, evidenceGraph) {
+  if (!evidenceGraph || !Array.isArray(evidenceGraph.evidenceObjects) || evidenceGraph.evidenceObjects.length === 0) {
+    return;
+  }
+
+  if (mode === 'profile') {
+    validateProfileAgainstEvidenceGraph(payload, evidenceGraph);
+    return;
+  }
+
+  validateResumeAgainstEvidenceGraph(payload, evidenceGraph);
+}
+
+function validateResumeAgainstEvidenceGraph(payload, evidenceGraph) {
+  const resume = String(payload && (payload.resumeMarkdown || payload.resumeLatex) || '');
+  const bulletLines = resume
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+/.test(line))
+    .filter((line) => !/^\*\*?(languages|web|software|tools|tech)\b/i.test(line.replace(/^[-*]\s+/, '')));
+
+  if (bulletLines.length === 0) {
+    throw new Error('Generated resume contains no evidence-backed bullets.');
+  }
+
+  const evidenceText = evidenceGraph.evidenceObjects
+    .map((item) => `${item.competency} ${item.supportingQuote} ${item.relatedJob} ${(item.quantifiedValues || []).join(' ')}`)
+    .join('\n')
+    .toLowerCase();
+  const unsupported = bulletLines.filter((line) => !hasMeaningfulEvidenceOverlap(line, evidenceText));
+
+  if (unsupported.length > Math.max(1, Math.floor(bulletLines.length * 0.35))) {
+    throw new Error(`Generated resume has unsupported bullets: ${unsupported.slice(0, 2).join(' | ')}`);
+  }
+
+  validateResumeEvidenceMap(payload, bulletLines, evidenceGraph);
+}
+
+function validateResumeEvidenceMap(payload, bulletLines, evidenceGraph) {
+  const evidenceIds = new Set(evidenceGraph.evidenceObjects.map((item) => item.id).filter(Boolean));
+  const map = Array.isArray(payload && payload.resumeEvidenceMap) ? payload.resumeEvidenceMap : [];
+  if (map.length === 0) {
+    throw new Error('Generated resume did not include resumeEvidenceMap.');
+  }
+
+  const normalizedMapBullets = new Set(map.map((item) => normalizeMapBullet(item && item.resumeBullet)));
+  const missingMap = bulletLines
+    .map((line) => line.replace(/^[-*]\s+/, '').trim())
+    .filter((bullet) => !normalizedMapBullets.has(normalizeMapBullet(bullet)));
+  if (missingMap.length > Math.max(1, Math.floor(bulletLines.length * 0.35))) {
+    throw new Error(`Generated resume has bullets without evidence mapping: ${missingMap.slice(0, 2).join(' | ')}`);
+  }
+
+  const invalidMap = map.filter((item) => {
+    const ids = Array.isArray(item && item.evidenceIds) ? item.evidenceIds : [];
+    return ids.length === 0 || ids.some((id) => !evidenceIds.has(String(id)));
+  });
+  if (invalidMap.length > 0) {
+    throw new Error('Generated resumeEvidenceMap contains missing or invalid evidence IDs.');
+  }
+}
+
+function normalizeMapBullet(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function validateProfileAgainstEvidenceGraph(payload, evidenceGraph) {
+  const cards = Array.isArray(payload && payload.profileCards) ? payload.profileCards : [];
+  if (cards.length === 0) {
+    throw new Error('Generated profile did not return evidence cards.');
+  }
+
+  const weakOrMissing = evidenceGraph.competencyMatches
+    .filter((item) => /weak evidence|missing/i.test(String(item.strength || '')))
+    .map((item) => String(item.requirement || item.competency || '').trim())
+    .filter(Boolean);
+  const questions = Array.isArray(payload && payload.followUpQuestions) ? payload.followUpQuestions.join(' ').toLowerCase() : '';
+
+  if (weakOrMissing.length && !extractMeaningfulWords(weakOrMissing.join(' ')).some((word) => questions.includes(word))) {
+    throw new Error('Generated follow-up questions do not target weak or missing evidence.');
+  }
+}
+
+function hasMeaningfulEvidenceOverlap(line, evidenceText) {
+  const words = extractMeaningfulWords(line);
+  const overlap = words.filter((word) => evidenceText.includes(word));
+  const hasQuantifiedOverlap = (line.match(/\b\d+(?:[.,]\d+)?%?\b/g) || [])
+    .some((value) => evidenceText.includes(value.toLowerCase()));
+  return overlap.length >= 2 || hasQuantifiedOverlap;
+}
+
+function extractMeaningfulWords(value) {
+  const stopWords = new Set([
+    'about', 'across', 'also', 'and', 'for', 'from', 'into', 'that', 'the', 'their', 'this',
+    'through', 'using', 'with', 'within', 'work', 'worked', 'role', 'project', 'candidate',
+    'evidence', 'source', 'medium', 'high', 'weak',
+  ]);
+  return Array.from(new Set(String(value || '').toLowerCase().match(/[a-z][a-z+#.-]{3,}/g) || []))
+    .filter((word) => !stopWords.has(word))
+    .slice(0, 24);
 }
 
 function analyzeCandidateEvidence(transcript, candidateName) {
@@ -1131,6 +1413,25 @@ async function transcribeWithGemini(apiKey, prompt, audioData, mimeType) {
   return transcript;
 }
 
+function isGeminiAudioMimeType(mimeType) {
+  const normalized = normalizeAudioMimeType(mimeType);
+  return [
+    'audio/wav',
+    'audio/mp3',
+    'audio/aiff',
+    'audio/aac',
+    'audio/ogg',
+    'audio/flac',
+    'audio/mpeg',
+    'audio/m4a',
+    'audio/l16',
+    'audio/s16le',
+    'audio/opus',
+    'audio/alaw',
+    'audio/mulaw',
+  ].includes(normalized);
+}
+
 async function generateArtifactsWithGemini(apiKey, prompt, mode) {
   const payload = {
     model: process.env.GEMINI_TEXT_MODEL || 'gemini-3.5-flash',
@@ -1467,7 +1768,11 @@ function collectJsonResponse(res, providerName, resolve, reject) {
 }
 
 function normalizeOpenAiMimeType(mimeType) {
-  return String(mimeType || 'audio/webm').toLowerCase().split(';')[0].trim() || 'audio/webm';
+  return normalizeAudioMimeType(mimeType) || 'audio/webm';
+}
+
+function normalizeAudioMimeType(mimeType) {
+  return String(mimeType || '').toLowerCase().split(';')[0].trim();
 }
 
 function normalizeUploadFileName(fileName, mimeType) {

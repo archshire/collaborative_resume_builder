@@ -1,52 +1,66 @@
-# collaborative_resume_builder
+# Resume Builder
 
 ## Overview
 
-collaborative_resume_builder is an AI-assisted interview and resume-building prototype for 42 students working on the `collaborative_resume` project.
+This branch of `collaborative_resume_builder` is now a regular job seeker resume builder.
 
-It helps a pair of students conduct an interview without multitasking between listening, note-taking, transcription, resume drafting, and evidence checking. The app records interview audio, transcribes it through a local AI backend, generates an evidence-based resume draft, identifies missing evidence, suggests follow-up questions, and lets the user regenerate the final resume after a second follow-up interview.
+The app helps a job seeker build a targeted, evidence-backed resume for a specific job. It collects job context, applicant information, interview answers, follow-up answers, and then turns that material into structured evidence before generating resume/profile artifacts.
 
-The working product description is:
+The current product caption is:
 
 ```text
-A tool to help 42 students in Circle 6 enjoy the project without multitasking. :)
+Build a resume for the job you want
 ```
+
+This project still preserves earlier 42 collaborative-resume documentation as process history, but the active branch direction is broader than the original school-project use case.
 
 ### Problem
 
-The `collaborative_resume` project asks students to interview each other, gather detailed information, write a professional resume for their partner, review it, and export the result as PDF.
+Most AI resume builders jump directly from raw user input to a polished resume. That creates a trust problem: the output can look professional even when the evidence is weak, missing, or invented.
 
-This creates several practical difficulties:
+This app is designed around a different question:
 
-- The interviewer must listen, ask useful questions, and take precise notes at the same time.
-- Important resume evidence can be missed during the first interview.
-- AI-generated resumes can invent or overstate claims if the transcript evidence is weak.
-- Students need a clear way to see what is supported by the interview and what still needs follow-up.
+```text
+What evidence do we actually have for this candidate, and how does it relate to the job?
+```
+
+The resume should be the final output of an evidence workflow, not a direct rewrite of interview text.
 
 ### Outcome
 
-This prototype turns the exercise into a two-part workflow:
+The current prototype uses a six-step workflow:
 
-1. Part 1 records and transcribes the initial interview, then generates an initial resume, skill profile, and missing-evidence feedback.
-2. Part 2 records and transcribes follow-up answers, then regenerates the resume and skill profile from the combined evidence.
+1. Context Setting
+2. Applicant Information
+3. Part 1 - Initial Interview
+4. Generate Resume / Skill Profile / Candidate Profile
+5. Part 2 - Interview Feedback and Follow-up Questions
+6. Generate Full Resume
 
 Current measurable outcomes:
 
-- Browser-based audio recording in 10-minute chunks.
-- Automated transcription through a local backend.
-- Gemini-first AI calls with OpenAI fallback where configured.
-- Evidence-governed resume generation.
-- Skill-profile cards with model-assigned evidence strength.
-- Follow-up question generation for missing evidence.
-- Final updated resume export through browser PDF printing.
+- Simulated single-user login with `css` / `12345678`.
+- Job context intake by link, document upload, manual paste, or image/screenshot upload.
+- AI-assisted job image OCR/classification where provider support exists.
+- Applicant information with highest qualification and additional qualifications by month/year.
+- Initial interview audio transcription or per-question text answers.
+- Structured evidence objects generated from applicant and interview data.
+- Competency classification as High Evidence, Medium Evidence, Weak Evidence, or Missing.
+- Follow-up questions targeted to weak/missing competencies.
+- Evidence review cards with filters and ignore/restore controls.
+- Final evidence check before full resume generation.
+- Resume evidence map showing which evidence supports each resume bullet.
 
 This is a prototype, not a validated hiring assessment system.
+
+For the clearest explanation of the current product logic, read [`docs/CURRENT_BUILD_SENSEMAKING.md`](docs/CURRENT_BUILD_SENSEMAKING.md).
 
 ## Reviewer Quick Links
 
 - Open the visual flow page: [`collaborative_resume_builder_flow.html`](collaborative_resume_builder_flow.html)
 - Direct flow page: [`docs/collaborative_resume_builder_flow.html`](docs/collaborative_resume_builder_flow.html)
 - Technical build explanation: [`docs/TECHNICAL_BUILD.md`](docs/TECHNICAL_BUILD.md)
+- Current build sensemaking: [`docs/CURRENT_BUILD_SENSEMAKING.md`](docs/CURRENT_BUILD_SENSEMAKING.md)
 
 The flow pages are repository documentation. Open them directly from GitHub/repository view, or open the HTML files from the local folder in a browser. The local app server at `http://localhost:4173` serves the built prototype, not the documentation pages.
 
@@ -55,20 +69,17 @@ The flow pages are repository documentation. Open them directly from GitHub/repo
 From the user's perspective:
 
 1. Open the app at `http://localhost:4173`.
-2. Read the fixed `CONTEXT` section for the StartupDigital Services junior freelance developer mission.
-3. In `Part 1 - Initial Interview`, enter the recruiter and applicant names.
-4. Use `Check Mic` to confirm that the browser can hear the microphone.
-5. Ask the suggested interview questions and press the record button.
-6. Stop the recording. The audio file appears in the recorder list and can be downloaded or transcribed immediately.
-7. Transcribe the recording. The transcript appears in the transcription box with speaker labels.
-8. Generate the initial resume.
-9. Generate the skill profile and interview feedback.
-10. Review the follow-up questions.
-11. In `Part 2 - Follow-up questions`, click `Ready to ask follow-up questions`.
-12. Record and transcribe follow-up answers.
-13. Click `Re-generate Resume` to combine the first resume with the follow-up transcript.
-14. Click `Re-generate Skill Profile` to refresh the profile using the updated evidence.
-15. Use `Save as PDF` from the updated resume section to export `resume_(applicant name).pdf`.
+2. Log in with the simulated credentials `css` / `12345678`.
+3. Add job context by link, upload, image/screenshot, or manual paste.
+4. Add applicant information, including highest qualification and additional qualifications.
+5. Generate interview questions from the job description.
+6. Record/transcribe the initial interview, or answer each question in text.
+7. Generate resume/profile artifacts and review the structured evidence cards.
+8. Ignore evidence that should not be used.
+9. Review weak/missing competencies and answer targeted follow-up questions.
+10. Refresh the final evidence check.
+11. Generate the final resume.
+12. Review the Evidence Used section to see which evidence supports each resume bullet.
 
 For a reviewer-friendly visual version of this flow, open [`docs/collaborative_resume_builder_flow.html`](docs/collaborative_resume_builder_flow.html) in a browser.
 
@@ -99,7 +110,7 @@ The screenshots below show the main user journey from context review to intervie
 - Browser MediaRecorder API for microphone capture
 - Browser Web Audio API for microphone testing and waveform display
 - HTML/CSS rendered from `src/main.ts`
-- Local file download and browser print-to-PDF export
+- Local file download and LaTeX resume export
 
 ### Backend components
 
@@ -195,8 +206,8 @@ The manual transcription fallback prompt asks the user to transcribe audio chunk
 - Decision: split the exercise into Part 1 and Part 2.
   Rationale: missing-evidence feedback should lead to a second interview pass, not sit unused on the screen.
 
-- Decision: move PDF export to the updated Part 2 resume.
-  Rationale: the final exported resume should include follow-up evidence.
+- Decision: move final resume export to the updated Part 2 resume.
+  Rationale: the final exported LaTeX resume should include follow-up evidence.
 
 ## Installation
 
@@ -286,7 +297,7 @@ collaborative_resume_builder/
 
 Key folders:
 
-- `src/`: browser UI, recording logic, transcript handling, artifact rendering, PDF export.
+- `src/`: browser UI, recording logic, transcript handling, artifact rendering, and LaTeX export.
 - `server/`: local backend for AI transcription and generation.
 - `docs/`: north star, architecture, technical build notes, AI collaboration notes, and Krystalize state/journal artifacts.
 - `dist/`: generated production build, ignored by git.
