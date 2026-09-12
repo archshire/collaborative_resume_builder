@@ -1,65 +1,32 @@
-# Verification Checklist
+# Regression checks
 
-This checklist records how the prototype was verified before submission.
+Requires Node.js 24 or newer.
 
-The purpose is not to claim full production test coverage. It is to show that the builder checked the main user journey, known runtime dependencies, and expected failure paths.
+```sh
+npm ci
+npm run check
+npx playwright install chromium
+npm run test:browser
+npm audit
+```
 
-## Automated / Command Checks
+`npm run check` runs 48 Node tests, TypeScript checking, the Vite production build, and the backend syntax check. Tests start a temporary loopback HTTP server; restricted environments need permission for local listening. No real provider keys or paid AI calls are required. Provider responses are mocked.
 
-- [x] Run `npm install`
-- [x] Run `npm run build`
-- [x] Run `node --check server/index.cjs`
+- `transcription.test.ts`: incremental saves, partial failure/retry, malformed success responses, failed editor commits.
+- `evidence.test.cjs`: explicit/unknown roles, multiline turns, direct information, nontechnical examples, transcript/draft separation, formatting without speaker guesses.
+- `validation.test.cjs`: nested payload types, bounds, scores, source quotes, job extraction and question contracts.
+- `security.test.cjs`: local access, IPv4/IPv6, DNS pinning, redirects, URL encodings, response limits.
+- `backend.test.cjs`: HTTP routing, request rejection, evidence gate, provider fallback, direct-info-only usage, invalid provider output.
+- `demo-access.test.ts`: demo credentials, approved snapshot whitelisting, and explicit applicant speaker filtering.
+- `opportunity.test.cjs`: requirement types, interpretation labels and exact source quotes.
+- `reflection.test.cjs`: source-excerpt fidelity and malformed output rejection.
+- `browser/native-shell.spec.ts`: nine tests for the completed applicant and three-candidate company demos, evidence legends, photo landing separation, six-step navigation, field preservation, actual URL/paste request wiring, privacy, failure recovery, asynchronous edit preservation, and mobile layouts.
+- `response-formats.test.cjs`: constrained source quotes, multiline enum safety, question cardinality and profile schema fields.
+- `browser/buttons.spec.ts`: document imports, answer organisation, both generation stages, clipboard, downloads, PDF preview, sharing/withdrawal, logout/reset, and synthetic microphone/recording controls.
+- `browser/workflow.spec.ts`: four Chromium tests for partial transcription failures in both parts, edits/retries, two-part generation, separate direct information, and same-origin access.
 
-## Local App Startup
+The 18 browser tests cover the CRB demo and original `/interview` workflow. Browser tests build the app and start an isolated server on port 4189 without provider keys. They do not reuse a personal session. Reports/results are ignored by Git. Set `PLAYWRIGHT_BROWSERS_PATH` for an alternative browser installation directory.
 
-- [x] Create `.env` from `.env.example`
-- [x] Add at least one API key for automated AI features
-- [x] Run `npm run build`
-- [x] Run `npm run serve`
-- [x] Open `http://localhost:4173`
+The earlier manual checklist was historical, not automated coverage. This suite does not claim to test real microphone accuracy, live model behavior, or print-dialog output. See [review findings and limitations](../docs/REVIEW_FIXES.md).
 
-## Part 1 - Initial Interview
-
-- [x] Enter recruiter name
-- [x] Enter applicant name
-- [x] Confirm recording is blocked if either name is missing
-- [x] Use `Check Mic` and confirm mic level/waveform responds
-- [x] Record Part 1 interview audio
-- [x] Stop recording
-- [x] Confirm audio file appears in the recording list
-- [x] Download audio file
-- [x] Transcribe audio file
-- [x] Confirm transcript appears with speaker labels
-- [x] Confirm the same audio file cannot be transcribed repeatedly after successful transcription
-- [x] Generate initial resume
-- [x] Generate skill profile
-- [x] Review interview feedback and follow-up questions
-
-## Part 2 - Follow-up Questions
-
-- [x] Confirm follow-up recording is blocked before clicking the ready button
-- [x] Click `Ready to ask follow-up questions`
-- [x] Record follow-up audio
-- [x] Stop recording
-- [x] Transcribe follow-up audio
-- [x] Re-generate resume using combined evidence
-- [x] Re-generate skill profile using updated evidence
-- [x] Save final resume as PDF
-
-## Fallback / Responsibility Checks
-
-- [x] Confirm manual transcription fallback is shown if automated transcription fails
-- [x] Confirm skill-profile percentages are labelled as AI evidence estimates
-- [x] Confirm generated resume does not invent unsupported candidate claims during test run
-- [x] Confirm test-only or interviewer-only transcripts return an insufficient-evidence response
-- [x] Confirm irrelevant or absurd applicant claims return an insufficient-evidence response
-- [x] Confirm broad self-claims are not treated as evidence unless backed by concrete examples
-- [x] Confirm `.env` is not committed or included in public submission
-
-## Verification Run
-
-Date: 2026-07-10
-
-Builder: Dan Yeo
-
-Notes: Manual browser verification completed by the builder. Command checks were re-run by Codex after the final UI and backend guardrail changes.
+Resume import coverage: `resume-import.test.cjs`, backend endpoint tests, and `browser/resume-import.spec.ts` verify upload validation, source fidelity for text, explicit review, existing-field preservation and mobile layout.

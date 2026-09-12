@@ -1,4 +1,10 @@
 import './styles.css';
+import { transcribeBatch } from './transcription';
+
+// A non-simple header prevents other websites from invoking the local backend.
+function apiFetch(url: string, options: RequestInit): Promise<Response> {
+  return fetch(url, { ...options, headers: { ...options.headers, 'X-Resume-Client': '1' } });
+}
 
 type Recording = {
   id: string;
@@ -55,6 +61,8 @@ type ContextMode = 'preset' | 'custom';
 type QuestionMode = 'preset' | 'custom' | 'cut_to_chase';
 type JobImportSource = 'url' | 'document';
 
+const transcriptionBusy = new Set<RecordingMode>();
+
 const MAX_SECONDS = 10 * 60;
 const EMPTY_RESUME_TEXT = 'Paste a transcript to generate a resume draft.';
 const EMPTY_PROFILE_TEXT = 'Generate a skill profile to see quick evidence-strength cards.';
@@ -101,7 +109,7 @@ x) Why Join Us?
 * Mentorship from experienced developers to help you grow your skills.
 * Potential for extended collaboration based on your performance and our needs.`;
 const INTERVIEW_QUESTIONS = [
-  'Tell me about the relevant qualifications, training or 42 experience you have for his junior developer role and how long you have been developing these skills.',
+  'Tell me about the relevant qualifications, training or experience you have for this role and how long you have been developing these skills.',
   'Choose one completed project that best fits this role. What did you personally build, what problem did it solve, and what result or working feature came out of it?',
   'What concrete front-end, back-end, or scripting work have you done with HTML, CSS, JavaScript, React, Vue, PHP, Python, or similar tools? Give examples from real projects.',
   'How have you used Git, debugging, testing, or validation to make sure your work was correct and ready to share?',
@@ -154,7 +162,7 @@ let latestJobImportSource: JobImportSource = 'url';
 let selectedJobDocument: File | null = null;
 let selectedApplicantDocument: File | null = null;
 
-const app = document.querySelector<HTMLDivElement>('#app');
+const app = document.querySelector<HTMLDivElement>('#interview-app') || document.querySelector<HTMLDivElement>('#app');
 
 if (!app) {
   throw new Error('App root was not found.');
@@ -173,7 +181,7 @@ app.innerHTML = `
     <section class="masthead">
       <div>
         <h1 class="brand-title">collaborative_resume_builder</h1>
-        <p class="hero-line">A tool to help 42 students in Circle 6 enjoy the project without multitasking. :)</p>
+        <p class="hero-line">Understand the need. Develop the capability. Demonstrate the contribution.</p>
       </div>
       <div class="status-card">
         <span class="status-dot" id="recording-dot"></span>
@@ -247,7 +255,7 @@ app.innerHTML = `
         <section class="question-guide">
           <h3>Suggested interview questions</h3>
           <div class="context-mode-switch question-mode-switch" role="group" aria-label="Question type">
-            <button class="context-mode-button is-active" id="questions-preset" type="button">42_Collaborative_resume</button>
+            <button class="context-mode-button is-active" id="questions-preset" type="button">Example opportunity</button>
             <button class="context-mode-button" id="questions-custom" type="button">Custom</button>
           </div>
           <ol id="preset-question-list" start="0">
@@ -296,11 +304,11 @@ app.innerHTML = `
               </label>
               <label>
                 <span>Phone</span>
-                <input class="applicant-direct-field" data-label="Phone" type="tel" placeholder="+65 9000 0000" />
+                <input class="applicant-direct-field" data-label="Phone" type="tel" placeholder="Phone number with country code" />
               </label>
               <label>
                 <span>Location</span>
-                <input class="applicant-direct-field" data-label="Location" type="text" placeholder="Singapore" />
+                <input class="applicant-direct-field" data-label="Location" type="text" placeholder="City, country" />
               </label>
               <label>
                 <span>LinkedIn</span>
@@ -320,15 +328,15 @@ app.innerHTML = `
               <legend>Resume sections</legend>
               <label>
                 <span>Education</span>
-                <textarea class="applicant-direct-field compact-field" data-label="Education" rows="3" placeholder="42 Singapore - Computer Programming - Sep 2023 to Sep 2025"></textarea>
+                <textarea class="applicant-direct-field compact-field" data-label="Education" rows="3" placeholder="Qualification or training - institution - dates"></textarea>
               </label>
               <label>
                 <span>Certifications</span>
                 <textarea class="applicant-direct-field compact-field" data-label="Certifications" rows="3" placeholder="Certificate name - issuer - year"></textarea>
               </label>
               <label>
-                <span>Technical skills</span>
-                <textarea class="applicant-direct-field compact-field" data-label="Technical skills" rows="4" placeholder="Languages: Python, C, SQL&#10;Tools: Git, Docker, Linux"></textarea>
+                <span>Skills and tools</span>
+                <textarea class="applicant-direct-field compact-field" data-label="Skills and tools" rows="4" placeholder="Relevant skills, methods, equipment or software you have used"></textarea>
               </label>
             </fieldset>
           </div>
@@ -350,6 +358,7 @@ app.innerHTML = `
               ${DOWNLOAD_ICON_HTML}
             </button>
           </div>
+          <p class="field-help">Review speaker roles before generating. Label confirmed applicant turns <strong>Applicant:</strong> and recruiter turns <strong>Recruiter:</strong>. Unknown or unlabelled speakers are excluded from evidence.</p>
           <textarea class="hidden-transcript" id="transcript" spellcheck="true"></textarea>
           <div
             class="transcript-editor is-empty"
@@ -506,6 +515,7 @@ app.innerHTML = `
             ${DOWNLOAD_ICON_HTML}
           </button>
         </div>
+        <p class="field-help">Label confirmed applicant turns <strong>Applicant:</strong>. Keep uncertain speakers unassigned until reviewed.</p>
         <textarea class="hidden-transcript" id="followup-transcript" spellcheck="true"></textarea>
         <div
           class="transcript-editor is-empty"
@@ -811,7 +821,7 @@ function getElement<T extends HTMLElement>(id: string): T {
 function renderContextSectionHtml(): string {
   return `
     <div class="context-mode-switch" role="group" aria-label="Context type">
-      <button class="context-mode-button is-active" id="context-preset" type="button">42_Collaborative_resume</button>
+      <button class="context-mode-button is-active" id="context-preset" type="button">Example opportunity</button>
       <button class="context-mode-button" id="context-custom" type="button">Custom</button>
     </div>
 
@@ -973,6 +983,8 @@ async function extractJobUrl(): Promise<void> {
     return;
   }
 
+  const priorCompany = customCompanyInput.value;
+  const priorDescription = customJobDescriptionInput.value;
   const startedAt = Date.now();
   let elapsedTimer = 0;
   const updateElapsedStatus = () => {
@@ -985,7 +997,7 @@ async function extractJobUrl(): Promise<void> {
   elapsedTimer = window.setInterval(updateElapsedStatus, 1000);
 
   try {
-    const response = await fetch('/api/extract-job-url', {
+    const response = await apiFetch('/api/extract-job-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
@@ -1012,8 +1024,12 @@ async function extractJobUrl(): Promise<void> {
       return;
     }
 
+    if (customCompanyInput.value !== priorCompany || customJobDescriptionInput.value !== priorDescription) {
+      throw new Error('The job information was edited during extraction. Your edits have been kept; extract again when ready.');
+    }
     customCompanyInput.value = result.company || '';
     customJobDescriptionInput.value = result.jobDescription || '';
+    document.dispatchEvent(new Event('crb:opportunity-changed'));
     jobImportStatus.classList.add('is-success');
     jobImportStatus.textContent = `Job details extracted. Review the company and job description before generating. ${formatElapsedTime(startedAt)}`;
     updateGeneratorState();
@@ -1035,6 +1051,8 @@ async function extractJobDocument(): Promise<void> {
     return;
   }
 
+  const priorCompany = customCompanyInput.value;
+  const priorDescription = customJobDescriptionInput.value;
   const startedAt = Date.now();
   let elapsedTimer = 0;
   const updateElapsedStatus = () => {
@@ -1048,7 +1066,7 @@ async function extractJobDocument(): Promise<void> {
 
   try {
     const text = await selectedJobDocument.text();
-    const response = await fetch('/api/extract-job-document', {
+    const response = await apiFetch('/api/extract-job-document', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1075,8 +1093,12 @@ async function extractJobDocument(): Promise<void> {
       return;
     }
 
+    if (customCompanyInput.value !== priorCompany || customJobDescriptionInput.value !== priorDescription) {
+      throw new Error('The job information was edited during extraction. Your edits have been kept; extract again when ready.');
+    }
     customCompanyInput.value = result.company || '';
     customJobDescriptionInput.value = result.jobDescription || '';
+    document.dispatchEvent(new Event('crb:opportunity-changed'));
     jobImportStatus.classList.add('is-success');
     jobImportStatus.textContent = `Job details extracted from document. Review the company and job description before generating. ${formatElapsedTime(startedAt)}`;
     updateGeneratorState();
@@ -1151,7 +1173,7 @@ async function generateCustomInterviewQuestions(): Promise<void> {
   elapsedTimer = window.setInterval(updateElapsedStatus, 1000);
 
   try {
-    const response = await fetch('/api/generate-interview-questions', {
+    const response = await apiFetch('/api/generate-interview-questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ company, jobDescription }),
@@ -1165,8 +1187,12 @@ async function generateCustomInterviewQuestions(): Promise<void> {
       throw new Error(`${result.error || 'Question generation failed.'}${detailText}`);
     }
 
+    if (customCompanyInput.value.trim() !== company || customJobDescriptionInput.value.trim() !== jobDescription) {
+      throw new Error('The opportunity changed while questions were being generated. Generate again for the updated description.');
+    }
     const questions = result.questions || [];
     customQuestionsInput.value = questions.map((question, index) => `${index + 1}. ${question}`).join('\n\n');
+    document.dispatchEvent(new Event('crb:questions-changed'));
     questionGenerationStatus.classList.add('is-success');
     questionGenerationStatus.textContent = `Generated ${questions.length} custom questions. ${formatElapsedTime(startedAt)}`;
   } catch (error) {
@@ -1726,10 +1752,10 @@ function renderTranscriptionFiles(mode: RecordingMode = 'initial'): void {
 
 function updateTranscribeState(mode: RecordingMode = 'initial'): void {
   if (mode === 'followup') {
-    followupTranscribeFilesButton.disabled = followupTranscriptionFiles.every((file) => file.transcribed);
+    followupTranscribeFilesButton.disabled = transcriptionBusy.has(mode) || followupTranscriptionFiles.every((file) => file.transcribed);
     return;
   }
-  transcribeFilesButton.disabled = transcriptionFiles.every((file) => file.transcribed);
+  transcribeFilesButton.disabled = transcriptionBusy.has(mode) || transcriptionFiles.every((file) => file.transcribed);
 }
 
 function handleRecordingAction(event: MouseEvent): void {
@@ -1771,11 +1797,13 @@ async function transcribeAudioFiles(
   mode: RecordingMode = 'initial',
   actionButton?: HTMLButtonElement,
 ): Promise<void> {
+  if (transcriptionBusy.has(mode)) return;
   const pendingFiles = filesToTranscribe.filter((file) => !file.transcribed);
   if (!pendingFiles.length) {
     return;
   }
 
+  transcriptionBusy.add(mode);
   const isRecordedInterviewSource = Boolean(actionButton);
   const targetButton = mode === 'followup' ? followupTranscribeFilesButton : transcribeFilesButton;
   const targetHelper = getTranscriptionHelper(mode, isRecordedInterviewSource);
@@ -1792,17 +1820,14 @@ async function transcribeAudioFiles(
   targetHelper.innerHTML = `<strong>${helperTitle}</strong><p>${helperIntro}</p>`;
 
   try {
-    const transcriptChunks: string[] = [];
-
-    for (let index = 0; index < pendingFiles.length; index += 1) {
-      const file = pendingFiles[index];
+    await transcribeBatch(pendingFiles, async (file, index) => {
       if (file.blob.size > MAX_INLINE_AUDIO_BYTES) {
         throw new Error(`${file.name} is too large for V2A inline transcription. Keep files below 18 MB for now.`);
       }
 
       targetHelper.innerHTML = `<strong>${helperTitle}</strong><p>Processing ${index + 1} of ${pendingFiles.length}: ${escapeHtml(file.name)}</p>`;
       const data = await blobToBase64(file.blob);
-      const response = await fetch('/api/transcribe', {
+      const response = await apiFetch('/api/transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1821,23 +1846,24 @@ async function transcribeAudioFiles(
         throw new Error(`${result.error || 'Transcription failed.'}${detailText}`);
       }
 
-      transcriptChunks.push(`Transcript chunk ${index + 1} - ${file.name}\n${result.transcript}`);
-      file.transcribed = true;
-    }
+      return result.transcript;
+    }, (file, text, index) => {
+      const chunk = `Transcript chunk ${index + 1} - ${file.name}\n${text}`;
+      const current = mode === 'followup' ? followupTranscript.value : transcript.value;
+      setTranscriptValue(current.trim() ? `${current.trim()}\n\n${chunk}` : chunk, mode);
+    });
 
-    const combinedTranscript = transcriptChunks.join('\n\n');
-    const currentTranscript = mode === 'followup' ? followupTranscript.value : transcript.value;
-    setTranscriptValue(currentTranscript.trim()
-      ? `${currentTranscript.trim()}\n\n${combinedTranscript}`
-      : combinedTranscript, mode);
-
-    targetHelper.innerHTML = `<strong>${isRecordedInterviewSource ? 'Recorded interview transcription complete' : 'Uploaded audio transcription complete'}</strong><p>The shared transcript box has been updated. Review the text before generating artifacts.</p>`;
+    targetHelper.innerHTML = `<strong>${isRecordedInterviewSource ? 'Recorded interview transcription complete' : 'Uploaded audio transcription complete'}</strong><p>The shared transcript box has been updated. Review the text and speaker roles before generating artifacts. Change confirmed applicant turns to Applicant:; unlabelled and unknown speakers are excluded from evidence.</p>`;
     renderRecordings(mode);
     renderTranscriptionFiles(mode);
     updateGeneratorState();
   } catch (error) {
-    showTranscriptionFallback(error instanceof Error ? error.message : 'Transcription failed.', pendingFiles, mode, isRecordedInterviewSource);
+    showTranscriptionFallback(error instanceof Error ? error.message : 'Transcription failed.', pendingFiles.filter((file) => !file.transcribed), mode, isRecordedInterviewSource);
   } finally {
+    transcriptionBusy.delete(mode);
+    renderRecordings(mode);
+    renderTranscriptionFiles(mode);
+    updateGeneratorState();
     stopButtonTimer();
     if (!actionButton) {
       targetButton.textContent = 'Transcribe';
@@ -1980,7 +2006,7 @@ function updateGeneratorState(): void {
 }
 
 function hasEnoughInitialApplicantEvidence(): boolean {
-  return transcript.value.trim().length > 40 || collectApplicantDirectInfo().length > 40;
+  return transcript.value.trim().length > 40 || Object.keys(collectApplicantDirectInfo()).length > 0;
 }
 
 function updateExportState(): void {
@@ -2041,12 +2067,13 @@ async function generateArtifacts(mode: GenerationMode): Promise<void> {
 
   try {
     const context = readCandidateContext();
-    const response = await fetch('/api/generate-artifacts', {
+    const response = await apiFetch('/api/generate-artifacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         candidateName: context.name,
         target: context.target,
+        directInfo: collectApplicantDirectInfo(),
         transcript: applicantEvidence,
         mode: mode === 'resume' ? 'resume' : 'profile',
       }),
@@ -2083,24 +2110,14 @@ async function generateArtifacts(mode: GenerationMode): Promise<void> {
 }
 
 function buildApplicantEvidence(initialTranscript: string): string {
-  const applicantDirectInfo = collectApplicantDirectInfo();
-  return [
-    'INITIAL INTERVIEW TRANSCRIPT',
-    initialTranscript,
-    applicantDirectInfo ? ['', 'APPLICANT-PROVIDED DIRECT INFORMATION', applicantDirectInfo].join('\n') : '',
-  ].filter(Boolean).join('\n');
+  return ['INITIAL INTERVIEW TRANSCRIPT', initialTranscript].join('\n');
 }
 
-function collectApplicantDirectInfo(): string {
+function collectApplicantDirectInfo(): Record<string, string> {
   const fields = Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('.applicant-direct-field'));
-  return fields
-    .map((field) => {
-      const value = field.value.trim();
-      const label = field.dataset.label || field.getAttribute('aria-label') || 'Applicant detail';
-      return value ? `${label}: ${value}` : '';
-    })
-    .filter(Boolean)
-    .join('\n');
+  return Object.fromEntries(fields
+    .map((field) => [field.dataset.label || 'Applicant detail', field.value.trim()])
+    .filter(([, value]) => Boolean(value)));
 }
 
 function setGenerationBusy(mode: GenerationMode, isBusy: boolean): void {
@@ -2153,12 +2170,13 @@ async function regenerateResume(): Promise<void> {
 
   try {
     const context = readCandidateContext();
-    const response = await fetch('/api/generate-artifacts', {
+    const response = await apiFetch('/api/generate-artifacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         candidateName: context.name,
         target: context.target,
+        directInfo: collectApplicantDirectInfo(),
         transcript: [
           buildApplicantEvidence(initialTranscript),
           '',
@@ -2204,20 +2222,18 @@ async function regenerateProfile(): Promise<void> {
 
   try {
     const context = readCandidateContext();
-    const response = await fetch('/api/generate-artifacts', {
+    const response = await apiFetch('/api/generate-artifacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         candidateName: context.name,
         target: context.target,
+        directInfo: collectApplicantDirectInfo(),
         transcript: [
           buildApplicantEvidence(transcript.value.trim()),
           '',
           'FOLLOW-UP INTERVIEW TRANSCRIPT',
           followupTranscript.value.trim(),
-          '',
-          'UPDATED RESUME DRAFT',
-          lastUpdatedResumeMarkdown,
         ].join('\n'),
         existingResume: lastUpdatedResumeMarkdown,
         mode: 'profile',
@@ -2258,12 +2274,13 @@ async function regenerateCandidateProfile(): Promise<void> {
 
   try {
     const context = readCandidateContext();
-    const response = await fetch('/api/generate-artifacts', {
+    const response = await apiFetch('/api/generate-artifacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         candidateName: context.name,
         target: context.target,
+        directInfo: collectApplicantDirectInfo(),
         transcript: [
           buildApplicantEvidence(initialTranscript),
           '',
@@ -3148,11 +3165,11 @@ function loadSampleTranscript(): void {
   applicantNameInput.value = 'Daniel';
   applicantInfoNameInput.value = 'Daniel';
   setTranscriptValue(`Interviewer: Tell me about yourself.
-Candidate: My name is Daniel. I enjoy building practical tools that help people work more clearly. I used Python and JavaScript for school projects, and I like explaining technical ideas to classmates.
+Candidate: My name is Daniel. I enjoy building practical tools that help people work more clearly. I have helped organise community activities, and I like making information easier for others to use.
 Interviewer: What are your strengths?
 Candidate: I am strong at communication, problem solving, and learning quickly. In one project I improved the workflow by organizing the data and writing clearer documentation.
 Interviewer: What kind of roles interest you?
-Candidate: I am interested in software development, AI-assisted tools, and education technology because I enjoy helping people understand complicated ideas.
+Candidate: I am interested in coordination and customer support because I enjoy helping people and organising practical work.
 Interviewer: What should you improve?
 Candidate: I need to collect more measurable results and describe my project impact with clearer numbers.`);
 }
@@ -3186,3 +3203,64 @@ const evidenceTerms = [
   'debugged',
   'designed',
 ];
+
+// The native CRB shell reuses these controls and their existing API handlers.
+export function useLiveOpportunity(): void {
+  setContextMode('custom');
+  setQuestionMode('custom');
+}
+export function addApplicantAnswer(text: string): void {
+  if (!text.trim()) return;
+  setTranscriptValue([transcript.value.trim(), `Applicant: ${text.trim()}`].filter(Boolean).join('\n\n'));
+}
+export type CompletedApplicantDemo = {
+  sourceUrl: string;
+  company: string;
+  jobDescription: string;
+  questions: readonly string[];
+  profile: Readonly<Record<string, string>>;
+  transcript: string;
+  feedback: string;
+  followupQuestions: readonly string[];
+  followupTranscript: string;
+  initialResume: string;
+  finalResume: string;
+  initialCandidateProfile: string;
+  updatedCandidateProfile: string;
+};
+export function loadCompletedApplicantDemo(data: CompletedApplicantDemo): void {
+  jobUrlInput.value = data.sourceUrl;
+  customCompanyInput.value = data.company;
+  customJobDescriptionInput.value = data.jobDescription;
+  customQuestionsInput.value = data.questions.map((question, index) => `${index + 1}. ${question}`).join('\n\n');
+  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('.applicant-direct-field').forEach((field) => {
+    field.value = data.profile[field.dataset.label || ''] || '';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  applicantNameInput.value = data.profile.Name || 'Applicant';
+  setTranscriptValue(data.transcript);
+  setTranscriptValue(data.followupTranscript, 'followup');
+  lastResumeMarkdown = data.initialResume;
+  lastUpdatedResumeMarkdown = data.finalResume;
+  lastCandidateProfileMarkdown = data.initialCandidateProfile;
+  lastUpdatedCandidateProfileMarkdown = data.updatedCandidateProfile;
+  lastFeedbackText = [data.feedback, 'FOLLOW-UP QUESTIONS', ...data.followupQuestions.map(question => `- ${question}`)].join('\n\n');
+  renderDocumentOutput(resumeOutput, lastResumeMarkdown, EMPTY_RESUME_TEXT);
+  renderDocumentOutput(updatedResumeOutput, lastUpdatedResumeMarkdown, EMPTY_RESUME_TEXT);
+  renderDocumentOutput(candidateProfileOutput, lastCandidateProfileMarkdown, EMPTY_CANDIDATE_PROFILE_TEXT);
+  renderDocumentOutput(updatedCandidateProfileOutput, lastUpdatedCandidateProfileMarkdown, EMPTY_CANDIDATE_PROFILE_TEXT);
+  renderFeedbackOutput(data.feedback, [...data.followupQuestions]);
+  copyResumeButton.disabled = false;
+  copyUpdatedResumeButton.disabled = false;
+  document.dispatchEvent(new CustomEvent('crb:opportunity-changed'));
+  document.dispatchEvent(new CustomEvent('crb:questions-changed'));
+  updateGeneratorState();
+}
+export function currentInterview() {
+  return { name: applicantNameInput.value.trim(), transcript: transcript.value, followup: followupTranscript.value,
+    company: customCompanyInput.value.trim(), jobDescription: customJobDescriptionInput.value.trim() };
+}
+export function stopActiveCapture(): void {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') stopRecording(true);
+  stopMicTest(true);
+}

@@ -1,0 +1,165 @@
+/* Extend the original palette, borders and controls; no separate visual design. */
+.crb-frame [hidden]{display:none!important}
+.crb-frame{min-height:100vh}
+.crb-top{display:flex;align-items:center;gap:24px;border-bottom:3px solid #101827;background:#ffffffcc;padding:18px 28px;position:relative;z-index:2}
+.crb-logo{font-size:28px;font-weight:950;color:#101827;text-decoration:none;line-height:1.15}
+.crb-logo span{display:block;font-size:11px;font-weight:700;margin-top:5px}
+.crb-top nav{display:flex;margin-left:auto;border:2px solid var(--internal-border);border-radius:10px;overflow:hidden}
+.crb-top nav a{padding:10px 24px;text-decoration:none;color:#101827;font-weight:750}
+.crb-top nav a[aria-current=page]{background:#101827;color:white}
+.crb-sidebar{position:fixed;width:225px;left:0;top:100px;bottom:0;padding:26px 18px;border-right:2px solid #334155;background:#eff6ffed;overflow-y:auto}
+.crb-sidebar nav{display:grid;gap:9px;margin:20px 0 30px}
+.crb-sidebar nav button{display:flex;align-items:center;gap:10px;text-align:left;min-height:48px;border:2px solid transparent;background:transparent;border-radius:10px;color:#334155;font-size:13px;padding:10px}
+.crb-sidebar nav button span{font-size:11px;opacity:.6}
+.crb-sidebar nav button[aria-current=page]{border-color:#101827;background:#fff;color:#101827;box-shadow:3px 3px 0 #a5b4fc}
+.crb-sidebar .note{font-size:12px;line-height:1.7}
+.crb-sidebar>a,.crb-demo-note{font-size:11px;color:#475569;line-height:1.7}
+.crb-content{margin-left:225px;padding:28px;max-width:1600px}
+.crb-content .shell{width:100%;padding:0;margin:0}
+.crb-content .context-panel{margin-bottom:0}
+.crb-content .custom-context{margin-top:0}
+.crb-content .context-mode-switch:has(>button[hidden]){display:none}
+.crb-content .part-heading-row{margin-top:0}
+.crb-content .outputs{margin-top:0}
+.crb-content .crb-legacy-skill-profile{display:none}
+.crb-content #login-panel{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:28px;align-items:start;max-width:1180px;margin:22px auto;padding:24px;background:#fff}
+.crb-original-preview{margin:0;min-width:0;padding:24px;background:linear-gradient(145deg,#faf7ed,#eef6f8);border-radius:8px}
+.crb-original-preview h2{font-size:clamp(26px,3vw,42px);line-height:1.1;margin:0 0 12px;overflow-wrap:anywhere}
+.crb-preview-tagline{font-size:18px;font-weight:750;line-height:1.4;margin:0 0 20px}
+.crb-preview-context{background:#ffffffed;border:1px solid #d5dde5;border-radius:8px;padding:20px}
+.crb-preview-context h3{font-size:13px;margin:0 0 22px}
+.crb-preview-context h4{font-size:14px;text-decoration:underline;margin:22px 0 8px}
+.crb-preview-context p{font-size:14px;line-height:1.7;margin:0}
+.crb-preview-context .note{margin-top:24px;font-size:12px}
+.crb-login-fields{min-width:0}
+@media(max-width:1100px){.crb-content #login-panel{grid-template-columns:minmax(0,1fr)}.crb-original-preview{max-width:780px}}
+#login-panel h1{font-size:32px;line-height:1.2;margin:0 0 18px}
+#login-panel p{color:#475569}
+#login-panel form{max-width:430px;margin:25px 0 0}
+#login-panel label{display:block;font-weight:750;margin:16px 0 7px}
+#login-panel input{width:100%;border:2px solid #334155;border-radius:10px;padding:12px;background:#f8fafc}
+#login-panel input::placeholder{color:#7b8493;opacity:1}
+#login-error{color:#a62b27!important}
+.crb-ai-status{padding:12px 16px;background:#fff8dc;border:2px solid #b68b37;border-radius:10px;font-size:12px;margin-bottom:20px;color:#71521a;line-height:1.7}
+.crb-context-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 8px}
+.crb-context-actions button{font-size:12px;padding:10px 14px}
+.crb-quick-answer{border:2px solid #334155;border-radius:10px;padding:18px;background:#f8fafc;margin:20px 0}
+.crb-quick-answer h3{margin:0 0 8px}
+.crb-quick-answer label{display:block;font-weight:700;font-size:13px;margin:14px 0 8px}
+.crb-quick-answer textarea{width:100%;border:2px solid #334155;border-radius:8px;padding:12px;resize:vertical}
+.crb-checkbox{display:flex;align-items:center;gap:8px;font-size:12px;margin:18px 0}
+.crb-checkbox input{width:18px;height:18px}
+.crb-requirement{padding:15px 0;border-top:1px solid #b7c4d5}
+.crb-requirement label{display:block;font-weight:700;font-size:12px;margin-bottom:8px}
+.crb-requirement textarea,#share-text,.crb-rubric textarea{width:100%;border:2px solid #334155;border-radius:8px;padding:12px;resize:vertical;font:inherit;background:#fff}
+.crb-requirement summary{font-size:12px;margin:10px 0;cursor:pointer}
+#opportunity-analysis h3{margin:24px 0 12px}
+.crb-preserve{white-space:pre-wrap;overflow-wrap:anywhere;padding:15px;border-left:3px solid #334155;background:#f1f5f9;margin:18px 0}
+#sharing-panel>label{display:block;font-weight:700;margin:20px 0 10px}
+.crb-rubric{border:2px solid #334155;border-radius:10px;padding:16px;margin:16px 0;background:#f8fafc}
+.crb-rubric summary{cursor:pointer;font-weight:750}
+.crb-rubric label{display:block;font-weight:700;font-size:13px;margin:15px 0 8px}
+.crb-rubric select{font:inherit;border:2px solid #334155;border-radius:8px;padding:10px;width:100%;background:#fff}
+.crb-rubric button{margin-top:12px}
+.crb-frame :is(button,a,summary,input,textarea,select):focus-visible{outline:3px solid #2563eb;outline-offset:3px}
+.crb-content .custom-context{grid-template-columns:minmax(0,1fr);min-width:0}
+.crb-content .custom-context>*{min-width:0}
+@media(max-width:650px){.crb-content .job-url-import{grid-template-columns:minmax(0,1fr) auto}.crb-content .job-document-upload,.crb-content .job-import-or{grid-column:1/-1;white-space:normal}.crb-content .job-url-import input{min-width:0}}
+@media(max-width:1000px){.crb-sidebar{width:190px;padding:20px 12px}.crb-content{margin-left:190px;padding:20px}.crb-content .workspace{grid-template-columns:1fr}.crb-content .outputs{grid-template-columns:1fr}}
+@media(max-width:650px){.crb-top{padding:15px;gap:10px;flex-wrap:wrap}.crb-logo{font-size:24px}.crb-logo span{font-size:9px}.crb-top nav{margin-left:0}.crb-top nav a{padding:8px 15px;font-size:12px}.crb-top #logout{margin-left:auto;font-size:12px;padding:0 10px}.crb-sidebar{position:static;width:100%;border-right:0;border-bottom:2px solid #334155;padding:12px;overflow:visible}.crb-sidebar>.eyebrow,.crb-sidebar>.note,.crb-sidebar>.crb-demo-note,.crb-sidebar>a{display:none}.crb-sidebar nav{display:flex;gap:7px;overflow:auto;margin:0;padding:3px}.crb-sidebar nav button{flex-shrink:0;font-size:11px;padding:8px;min-height:40px;gap:5px}.crb-content{margin-left:0;padding:16px}.crb-content #login-panel{padding:22px;margin:10px auto}#login-panel h1{font-size:26px}.crb-content .panel{padding:16px}.crb-context-actions{flex-direction:column}.crb-context-actions button{width:100%}.crb-content .panel-heading{flex-wrap:wrap}.crb-content .custom-context textarea{min-height:120px}}
+
+/* Six-step workspace and separate photo landing, based on resume_builder_by_42. */
+.crb-frame{background:#eef3f7;color:#18202a}
+.crb-top{height:100px;border-bottom:1px solid #d4dee8;background:#fff;padding:18px 28px}
+.crb-sidebar{width:286px;background:#202a35;color:#f8fafc;border-right:1px solid #d4dee8;padding:24px 18px}
+.crb-sidebar .eyebrow,.crb-sidebar .note,.crb-sidebar>a,.crb-sidebar .crb-demo-note{color:#b6c2cf}
+.crb-sidebar nav button{width:100%;min-height:76px;border:1px solid #ffffff1a;border-radius:8px;background:#ffffff0e;color:#f8fafc;padding:12px;gap:11px}
+.crb-sidebar nav button[aria-current=page]{border-color:#f0c165;background:#c76357;color:#fff;box-shadow:inset 4px 0 0 #f0c165}
+.crb-sidebar nav button .crb-step-number{display:grid;place-items:center;flex:0 0 34px;height:34px;border-radius:50%;background:#fff7ed;color:#733f36;opacity:1;font-weight:900}
+.crb-sidebar nav button .crb-step-label{opacity:1;font-size:13px}
+.crb-step-label strong,.crb-step-label small{display:block}
+.crb-step-label small{font-size:11px;font-weight:400;margin-top:5px;color:#e2e8f0}
+.crb-content{margin-left:286px;max-width:none;min-height:calc(100vh - 100px);background:linear-gradient(#f6f8fbec,#e9eef3ee),var(--workspace-image) center/cover fixed;padding:32px}
+.crb-content .panel{border:1px solid #d4dee8;border-radius:8px;box-shadow:0 12px 32px #14202c0a;background:#fffffff5;padding:24px}
+.crb-content .panel h2{font-size:21px;line-height:1.3}
+.crb-content :is(input,textarea,select){border:1px solid #c9d3df;border-radius:8px;color:#16202b;background:#fff}
+.crb-content .primary{background:#116a63}.crb-content .secondary{background:#2e5f9f}
+.crb-content :is(.job-document-upload,.upload-doc-button){background:#2e5f9f;color:#fff}
+.crb-content .workspace{grid-template-columns:minmax(0,1fr)}
+.crb-content .outputs{grid-template-columns:minmax(0,1fr)}
+.crb-content .part-heading{font-size:24px;margin:0 0 20px}
+.crb-content .crb-applicant-panel .applicant-direct-form{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.crb-content .crb-applicant-panel fieldset{min-width:0}
+.crb-step-footer{display:flex;justify-content:space-between;gap:20px;margin-top:24px}
+#sharing-panel{margin-top:24px}
+.crb-frame.is-landing{min-height:100vh;background:linear-gradient(90deg,#08101820,#ffffff05 48%,#ffffffa3),var(--landing-image) left center/cover no-repeat}
+.is-landing .crb-top{background:#ffffffb8;border-bottom:0}
+.is-landing .crb-content{margin:0;min-height:calc(100vh - 100px);background:none;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:40px}
+.is-landing .crb-content #login-panel{display:block;width:min(430px,100%);margin:0 min(6vw,96px) 0 0;padding:30px;border:1px solid #d8e1ead1;border-radius:8px;background:#ffffffe0;backdrop-filter:blur(8px);box-shadow:0 24px 70px #14202c33}
+#login-panel h1{font-size:36px;line-height:1.06}
+#login-panel form button{width:100%}
+.crb-one-click-demo{max-width:430px;margin-top:22px;padding-top:20px;border-top:1px solid #cbd5e1;text-align:center}
+.crb-one-click-demo>span{display:block;margin:-32px auto 13px;width:44px;background:#fffffff0;color:#64748b;font-size:12px;text-transform:uppercase}
+.crb-one-click-demo .demo-launch{width:100%;padding:13px 16px;border:1px solid #1f65ad;background:linear-gradient(115deg,#2867b2,#12867c);color:#fff;border-radius:8px;font-weight:850;box-shadow:0 7px 18px #1b568d2b}
+.crb-one-click-demo .demo-launch:hover{filter:brightness(1.08)}
+.crb-one-click-demo .company-launch{margin-top:10px;background:linear-gradient(115deg,#6b4da1,#b34f79);border-color:#764477}
+.crb-one-click-demo p{margin:10px 4px 0;font-size:12px;line-height:1.5}
+.crb-demo-banner{display:flex;gap:8px;flex-direction:column;margin:0 0 22px;padding:14px 16px;border:1px solid #7fc9bf;border-left:5px solid #16867c;border-radius:8px;background:#eafaf6;color:#153f3b}
+.crb-demo-banner span{font-size:12px;line-height:1.5}
+.evidence-coverage{margin:0 0 24px;padding:20px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc}
+.evidence-heading{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.evidence-heading .eyebrow{margin:0 0 5px;color:#475569}.evidence-heading>div>strong{font-size:21px}.evidence-heading p:last-child{margin:7px 0 0;font-size:12px;color:#475569}
+.coverage-score{display:grid;place-items:center;flex:0 0 76px;height:76px;border-radius:50%;background:#fff;border:8px solid #2f855a;color:#153f2a;font-size:24px;font-weight:900}.coverage-score span{font-size:11px;margin-top:-18px}
+.coverage-bar{display:flex;height:22px;margin:20px 0 13px;border-radius:12px;overflow:hidden;background:#d7dde4}.coverage-bar>span{min-width:0}
+.coverage-supported{background:#2f9e61}.coverage-partial{background:#f0ad32}.coverage-self-reported{background:#3784c6}.coverage-none{background:#9aa5b1}
+.coverage-legend{display:flex;flex-wrap:wrap;gap:10px 18px;font-size:12px}.coverage-legend span{display:flex;align-items:center;gap:6px}.coverage-legend i{width:12px;height:12px;border-radius:3px}.coverage-legend strong{margin-left:2px}
+.coverage-legend-block{margin:0 0 18px;padding:13px 15px;border:1px solid #cbd5e1;border-radius:8px;background:#fff}.coverage-legend-block>strong{display:block;margin-bottom:10px;font-size:12px;color:#334155;text-transform:uppercase;letter-spacing:.05em}
+.company-candidates>.coverage-legend-block{margin-top:20px;background:#f8fafc}
+.coverage-note{margin:16px 0;color:#475569;font-size:12px;line-height:1.5}
+.evidence-items details{border-top:1px solid #d7dee7;padding:13px 0}.evidence-items summary{display:flex;justify-content:space-between;align-items:center;gap:18px;cursor:pointer;font-size:13px}.evidence-items summary>span{font-weight:700}.evidence-items summary>strong{flex:0 0 auto;padding:5px 8px;border-radius:5px;color:#fff;font-size:11px}.evidence-items .status-supported{background:#237a49}.evidence-items .status-partial{background:#9a6500}.evidence-items .status-self-reported{background:#286da8}.evidence-items .status-none{background:#68737e}
+.evidence-items p{font-size:13px;line-height:1.6}.evidence-items label{display:block;margin:12px 0 6px;font-size:12px;font-weight:700}.evidence-items select{width:100%;padding:9px}
+@media(max-width:650px){.evidence-heading{align-items:flex-start}.coverage-score{flex-basis:64px;height:64px;border-width:6px;font-size:20px}.evidence-items summary{align-items:flex-start;flex-direction:column;gap:8px}}
+.company-demo-heading,.candidate-detail-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}.company-demo-heading h2,.candidate-detail-heading h2{margin:4px 0}.company-demo-heading>span{padding:8px 12px;border-radius:20px;background:#173b67;color:#fff;font-size:12px;font-weight:800}
+.candidate-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:24px 0}.candidate-card{padding:18px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;box-shadow:0 8px 20px #14202c0c}.candidate-card-top{display:flex;justify-content:space-between;gap:12px}.candidate-card h3{margin:0 0 5px}.candidate-card-top p{font-size:12px;margin:0;color:#526171}.candidate-card-top>strong{flex:0 0 auto;color:#206841;font-size:24px}.candidate-card-top>strong span{font-size:11px}.candidate-card .coverage-bar{height:14px;margin:16px 0}.candidate-contribution{min-height:86px;font-size:13px;line-height:1.55}.candidate-card button{width:100%}
+.candidate-detail{margin-top:32px;padding:24px;border:2px solid #31577f;border-radius:10px;background:#fff;scroll-margin-top:120px}.candidate-detail-heading{padding-bottom:20px;border-bottom:1px solid #d7dee7}.candidate-detail-heading>div>p:last-child{max-width:760px;line-height:1.55}.candidate-detail-columns{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px}.candidate-detail-columns>section{padding:18px;border-radius:8px;background:#f3f6f9}.candidate-detail-columns li{margin:10px 0;line-height:1.5}.evidence-items textarea{width:100%;min-height:80px;padding:10px}.assessment-saved{font-size:12px;color:#237a49;font-weight:700}
+@media(max-width:1000px){.candidate-card-grid{grid-template-columns:1fr}.candidate-contribution{min-height:0}}@media(max-width:650px){.company-demo-heading,.candidate-detail-heading{flex-direction:column}.candidate-detail-columns{grid-template-columns:1fr}.candidate-detail{padding:17px}}
+.is-landing #ai-configuration{max-width:430px;margin:20px min(6vw,96px) 0 0}
+@media(max-width:1000px){.crb-sidebar{width:240px}.crb-content{margin-left:240px;padding:24px}.crb-content .crb-applicant-panel .applicant-direct-form{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:650px){.crb-top{height:auto;min-height:100px;padding:15px}.crb-sidebar{width:100%;padding:10px}.crb-sidebar nav button{width:auto;min-height:48px}.crb-step-label small{display:none}.crb-content{margin:0;padding:16px}.crb-content .panel{padding:18px}.is-landing .crb-content{padding:24px 16px;justify-content:flex-start}.is-landing .crb-content #login-panel{margin:0;padding:24px}.is-landing #ai-configuration{margin:18px 0 0}.crb-frame.is-landing{background-position:35% center}#login-panel h1{font-size:30px}}
+/* Short requirement corrections should not inherit the 300px transcript editor height. */
+.crb-content .crb-requirement textarea{min-height:72px;height:auto}
+.crb-content .crb-rubric textarea{min-height:96px;height:auto}
+/* Applicant details have their own full-width sections, rather than nested columns. */
+.crb-content .crb-applicant-panel .applicant-direct-form{grid-template-columns:minmax(0,1fr);gap:32px}
+.crb-content .crb-applicant-panel fieldset{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 32px;padding:24px;border:1px solid #d4dee8;background:#f8fafc}
+.crb-content .crb-applicant-panel fieldset label{gap:10px}
+.crb-content .crb-applicant-panel fieldset input{min-height:48px;padding:12px}
+.crb-content .crb-applicant-panel fieldset textarea{min-height:100px;padding:12px}
+.resume-import{margin:24px 0 32px;padding:22px;background:#eef6f8;border:1px solid #cbdde4;border-radius:10px}
+.resume-import-heading{display:flex;gap:20px;align-items:center;justify-content:space-between}
+.resume-import h3{margin:0 0 8px;font-size:18px}.resume-import p{line-height:1.6;margin:8px 0}
+#upload-resume{display:flex;align-items:center;gap:10px;flex-shrink:0}
+#resume-import-review{border-top:1px solid #cbdde4;margin-top:20px;padding-top:20px}
+.resume-suggestion{margin:18px 0}.resume-suggestion label{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-weight:700}
+.resume-suggestion input{width:18px;height:18px}.crb-content .resume-suggestion textarea{width:100%;min-height:64px;padding:12px}
+#resume-import-review>button{margin:8px 12px 0 0}
+@media(max-width:850px){.crb-content .crb-applicant-panel fieldset{grid-template-columns:minmax(0,1fr);padding:20px;gap:22px}.resume-import-heading{align-items:flex-start;flex-direction:column}}
+.crb-top #profile-tab{border:1px solid #bcc8d6;min-height:42px;padding:0 18px;border-radius:8px}
+.crb-top #profile-tab[aria-pressed=true]{background:#116a63;color:#fff;border-color:#116a63}
+@media(max-width:650px){.crb-top #profile-tab{padding:0 12px;font-size:12px}.crb-top #logout{margin-left:0}}
+
+/* Brighter CRB identity while preserving the dark-sidebar/light-workspace split. */
+.crb-frame .crb-top{background:linear-gradient(112deg,#ffffff 0%,#eaf2ff 48%,#d8f4ed 100%);box-shadow:0 5px 20px #17365f14}
+.crb-logo{display:flex;align-items:center;gap:12px}
+.crb-logo-mark{width:46px;height:46px;flex:0 0 46px;filter:drop-shadow(0 5px 8px #184a7840)}
+.crb-logo>.crb-logo-copy{display:block;margin:0}
+.crb-logo-copy strong{display:block;font-size:28px;line-height:1;font-weight:950;letter-spacing:.02em}
+.crb-logo-copy small{display:block;margin-top:6px;font-size:11px;line-height:1.2;font-weight:700}
+.crb-sidebar nav button{background:#173b67;border-color:#31577f;color:#fff;box-shadow:0 4px 10px #0717292b}
+.crb-sidebar nav button:hover{background:#214d7e;border-color:#5d83aa}
+.crb-sidebar nav button[aria-current=page]{background:#f6c94f;border-color:#ffe49a;color:#33280c;box-shadow:inset 5px 0 0 #fff1ad,0 7px 16px #081b303d}
+.crb-sidebar nav button .crb-step-number{background:#dcecff;color:#173b67;border:1px solid #9fc3ee}
+.crb-sidebar nav button[aria-current=page] .crb-step-number{background:#fffaf0;color:#60470a;border-color:#fff}
+.crb-sidebar nav button[aria-current=page] .crb-step-label small{color:#594817}
+.crb-sidebar nav button .crb-step-label small{color:#d6e5f5}
+@media(max-width:650px){.crb-logo-mark{width:40px;height:40px;flex-basis:40px}.crb-logo-copy strong{font-size:24px}.crb-logo-copy small{font-size:9px}}
