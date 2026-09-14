@@ -22,6 +22,14 @@ test('backend accepts the local app and rejects hostile Hosts, origins and simpl
   assert.equal(checkLocalRequest(local({ origin: undefined })), 0); // trusted local CLI
 });
 
+test('hosted mode accepts only the exact configured HTTPS origin', () => {
+  const hosted = local({ host: 'crb-demo.up.railway.app', origin: 'https://crb-demo.up.railway.app' });
+  assert.equal(checkLocalRequest(hosted, { publicOrigin: 'https://crb-demo.up.railway.app' }), 0);
+  assert.equal(checkLocalRequest(local({ host: 'crb-demo.up.railway.app', origin: undefined }), { publicOrigin: 'https://crb-demo.up.railway.app' }), 403);
+  assert.equal(checkLocalRequest(local({ host: 'evil.example', origin: 'https://evil.example' }), { publicOrigin: 'https://crb-demo.up.railway.app' }), 403);
+  assert.equal(checkLocalRequest(hosted, { publicOrigin: 'http://crb-demo.up.railway.app' }), 500);
+});
+
 test('IPv4/IPv6 private, loopback, metadata, mapped and reserved ranges are blocked', () => {
   for (const ip of ['0.0.0.0', '10.0.0.1', '100.64.0.1', '127.0.0.1', '169.254.169.254', '172.16.0.1',
     '192.168.0.1', '192.0.0.170', '192.0.2.1', '198.18.0.1', '224.0.0.1', '255.255.255.255', '::', '::1',

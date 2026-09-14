@@ -6,6 +6,7 @@ const https = require('https');
 const path = require('path');
 const { URL } = require('url');
 const { checkLocalRequest, resolvePublicUrl } = require('./security.cjs');
+const { createDemoAccess, createFixedWindowLimiter } = require('./hosting.cjs');
 const { analyzeCandidateEvidence } = require('./evidence.cjs');
 const { validateReflection, reflectionPrompt } = require('./reflection.cjs');
 const { validateOpportunity, opportunityPrompt } = require('./opportunity.cjs');
@@ -17,12 +18,46 @@ const maxBodyBytes = 28 * 1024 * 1024;
 
 loadEnv(path.join(rootDir, '.env'));
 const port = Number(process.env.PORT || 4173);
+const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+const listenHost = process.env.HOST || (isRailway ? '0.0.0.0' : '127.0.0.1');
+const publicOrigin = process.env.PUBLIC_APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
+const demoAccess = createDemoAccess(process.env.DEMO_ACCESS_PASSWORD || '', { secure: Boolean(publicOrigin) });
+const aiLimit = Math.max(1, Number(process.env.AI_RATE_LIMIT || 30));
+const consumeAiRequest = createFixedWindowLimiter({ limit: aiLimit });
+const consumeLoginAttempt = createFixedWindowLimiter({ limit: 10, windowMs: 15 * 60 * 1000 });
+const paidRoutes = new Set(['/api/understand-opportunity', '/api/import-resume', '/api/reflect-answer', '/api/transcribe',
+  '/api/generate-artifacts', '/api/extract-job-url', '/api/extract-job-document', '/api/generate-interview-questions']);
 
 const server = http.createServer(async (req, res) => {
   try {
-    const denied = checkLocalRequest(req);
-    if (denied) { sendJson(res, denied, { error: 'Only same-origin local JSON requests are allowed.' }); return; }
+    if (req.method === 'GET' && req.url === '/health') { sendJson(res, 200, { status: 'ok' }); return; }
+    const denied = checkLocalRequest(req, { publicOrigin });
+    if (denied) { sendJson(res, denied, { error: denied === 500 ? 'Invalid public application URL configuration.' : 'Only same-origin requests from the configured application are allowed.' }); return; }
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+
+    if (req.method === 'GET' && url.pathname === '/api/demo-session') {
+      sendJson(res, 200, { required: demoAccess.required, authenticated: demoAccess.authenticated(req) }); return;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/demo-login') {
+      const attempt = consumeLoginAttempt(demoAccess.rateKey(req));
+      if (!attempt.allowed) { sendJson(res, 429, { error: 'Too many access attempts. Wait before trying again.' }, { 'Retry-After': attempt.retryAfter }); return; }
+      let password;
+      try { password = string((await readJsonBody(req)).password, 'password', 256); }
+      catch (error) { sendJson(res, error.statusCode || 400, { error: error.message }); return; }
+      const sessionCookie = demoAccess.login(password);
+      if (!sessionCookie) { sendJson(res, 401, { error: 'The demonstration password is incorrect.' }); return; }
+      sendJson(res, 200, { authenticated: true }, { 'Set-Cookie': sessionCookie, 'Cache-Control': 'no-store' }); return;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/demo-logout') {
+      sendJson(res, 200, { authenticated: false }, { 'Set-Cookie': demoAccess.logoutCookie(), 'Cache-Control': 'no-store' }); return;
+    }
+    if (url.pathname.startsWith('/api/') && !demoAccess.authenticated(req)) {
+      sendJson(res, 401, { error: 'Enter the private demonstration password to use CRB.' }); return;
+    }
+    if (req.method === 'POST' && paidRoutes.has(url.pathname)) {
+      const usage = consumeAiRequest(demoAccess.rateKey(req));
+      if (!usage.allowed) { sendJson(res, 429, { error: 'AI request limit reached. Wait before trying again.' }, { 'Retry-After': usage.retryAfter }); return; }
+    }
 
     if (req.method === 'GET' && url.pathname === '/api/ai-status') {
       sendJson(res, 200, { configured: Boolean(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY) }); return;
@@ -79,9 +114,14 @@ const server = http.createServer(async (req, res) => {
 server.requestTimeout = 30000;
 server.headersTimeout = 15000;
 
-if (require.main === module) server.listen(port, '127.0.0.1', () => {
-  console.log(`collaborative_resume_builder listening on http://localhost:${port}`);
-});
+if (require.main === module) {
+  if (isRailway && !demoAccess.required) {
+    console.error('DEMO_ACCESS_PASSWORD is required on Railway. Refusing to start an unprotected AI demo.');
+    process.exitCode = 1;
+  } else server.listen(port, listenHost, () => {
+    console.log(`collaborative_resume_builder listening on ${listenHost}:${port}`);
+  });
+}
 
 async function handleImportResume(req, res) {
   let file;
@@ -1426,11 +1466,13 @@ function serveStatic(pathname, res) {
   });
 }
 
-function sendJson(res, status, payload) {
+function sendJson(res, status, payload, extraHeaders = {}) {
   const data = JSON.stringify(payload);
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(data),
+    'Cache-Control': 'no-store',
+    ...extraHeaders,
   });
   res.end(data);
 }

@@ -67,7 +67,7 @@ State limitations must remain explicit in UI and documentation. Do not describe 
 
 ## Security invariants
 
-Keep the local server bound to loopback. Preserve same-origin checks, the required JSON client header, body limits, timeouts, static-path containment, public-address validation, redirect revalidation and DNS-pinned URL fetching.
+Keep local mode bound to loopback. Hosted mode may bind publicly only with an exact HTTPS origin, a configured outer demo password and paid-endpoint rate limiting. Preserve same-origin checks, the required JSON client header, body limits, timeouts, static-path containment, public-address validation, redirect revalidation and DNS-pinned URL fetching.
 
 Do not weaken URL controls to support a difficult job site. Provide paste/upload fallback instead. A public deployment requires real authentication and authorization; the local controls are insufficient.
 

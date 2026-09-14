@@ -36,6 +36,16 @@ CRB currently runs as a local TypeScript/Vite frontend with a Node HTTP backend.
 
 `/interview` remains because the CRB shell reuses its fields, recording, transcription, artifact rendering and export handlers. It is an implementation dependency and regression surface, even though its older preset entry points are hidden in the main CRB applicant flow.
 
+### Protected hosting layer
+
+- Local mode remains bound to `127.0.0.1` and does not require an outer password unless configured.
+- Railway mode binds to `0.0.0.0`, reads Railway's `PORT`, and refuses to start without `DEMO_ACCESS_PASSWORD`.
+- Hosted users pass an outer password gate backed by an HTTP-only, secure, same-site cookie.
+- Paid AI endpoints have a per-session in-memory fixed-window limit.
+- `/health` is public and contains no application data.
+- Public Host and Origin values must match the configured HTTPS application origin.
+- `railway.toml` and `RAILWAY_DEPLOYMENT.md` describe deployment, which has not yet occurred.
+
 ## Demo versus live behaviour
 
 | Area | Demo fixture | Live behaviour |
@@ -107,7 +117,7 @@ Production architecture is described in [`../README.md`](../README.md#production
 
 At this handover:
 
-- 48 Node regression tests pass.
+- 53 Node regression tests pass, including hosted access, rate-limit and public-origin checks.
 - 18 Playwright browser tests pass.
 - TypeScript checking passes.
 - The Vite production build passes.

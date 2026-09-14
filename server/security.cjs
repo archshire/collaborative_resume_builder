@@ -1,13 +1,24 @@
 const dns = require('node:dns').promises;
 const ipaddr = require('ipaddr.js');
 
-// Local-only prototype: trust local processes, never arbitrary browser origins or Hosts.
-function checkLocalRequest(req) {
+// Accept localhost by default and one explicitly configured public origin when hosted.
+function checkLocalRequest(req, { publicOrigin = '' } = {}) {
   const port = req.socket.localPort;
   const allowed = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
+  let configuredOrigin = '';
+  if (publicOrigin) {
+    try {
+      const parsed = new URL(publicOrigin);
+      if (parsed.protocol !== 'https:' || parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username || parsed.password) return 500;
+      allowed.add(parsed.host);
+      configuredOrigin = parsed.origin;
+    } catch { return 500; }
+  }
   const host = req.headers.host;
   if (!allowed.has(host)) return 403;
-  if (req.headers.origin && req.headers.origin !== `http://${host}`) return 403;
+  const expectedOrigin = configuredOrigin && host === new URL(configuredOrigin).host ? configuredOrigin : `http://${host}`;
+  if (req.headers.origin && req.headers.origin !== expectedOrigin) return 403;
+  if (configuredOrigin && host === new URL(configuredOrigin).host && req.method === 'POST' && !req.headers.origin) return 403;
   if (req.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(req.headers['sec-fetch-site'])) return 403;
   if (req.method === 'POST') {
     if (req.headers['x-resume-client'] !== '1') return 403;

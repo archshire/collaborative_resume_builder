@@ -36,6 +36,7 @@ The repository contains a **local working demonstration**, not a production hiri
 - [Configuration](#configuration)
 - [Development commands](#development-commands)
 - [Testing](#testing)
+- [Railway deployment](#railway-deployment)
 - [Current limitations](#current-limitations)
 - [Recommended delivery phases](#recommended-delivery-phases)
 - [Related documentation](#related-documentation)
@@ -76,6 +77,7 @@ CRB does not make hiring decisions. Evidence coverage describes the material sup
 | Applicant-controlled company sharing | Working for one in-tab snapshot |
 | Production accounts, database and cross-device sessions | Not implemented |
 | Real multi-applicant company board | Not implemented; current records are fixtures |
+| Protected Railway demo gate and rate limit | Implemented; deployment not yet performed |
 
 The complete original interview surface remains at `/interview` for comparison and its full recording controls.
 
@@ -444,10 +446,12 @@ collaborative_resume_builder/
 │   ├── demo-access.ts          # Demo access and sharing helpers
 │   ├── resume-import.ts        # Resume import UI
 │   ├── transcription.ts        # Incremental transcription logic
+│   ├── hosting.css              # Private hosted-demo access screen
 │   ├── native-shell.css        # CRB presentation
 │   └── styles.css              # Interview presentation
 ├── tests/                      # Node and Playwright regression tests
 ├── .env.example
+├── railway.toml                # Railway build, start and health configuration
 ├── package.json
 └── README.md
 ```
@@ -458,12 +462,16 @@ collaborative_resume_builder/
 
 ```dotenv
 OPENAI_API_KEY=your_openai_api_key_here
+DEMO_ACCESS_PASSWORD=
+AI_RATE_LIMIT=30
 PORT=4173
 ```
 
 Optional variables include `OPENAI_TEXT_MODEL` and `OPENAI_TRANSCRIBE_MODEL`. Some endpoints retain optional Gemini paths in code, while the current example configuration uses OpenAI.
 
 Never commit `.env` or expose API keys in browser code, screenshots, logs or issues.
+
+When `DEMO_ACCESS_PASSWORD` is set, CRB displays a server-enforced outer access gate. Railway deployments require this variable and refuse to start without it.
 
 ## Development commands
 
@@ -491,6 +499,12 @@ npm run test:browser
 ```
 
 See [`tests/README.md`](tests/README.md) for details.
+
+## Railway deployment
+
+The repository includes `railway.toml`, environment-aware host validation, `/health`, a private-demo session cookie and an in-memory paid-request limit. Follow [`docs/RAILWAY_DEPLOYMENT.md`](docs/RAILWAY_DEPLOYMENT.md) to connect the GitHub branch, configure secrets, generate a domain and verify the hosted application.
+
+Railway hosting does not make session data persistent. Applicant workspace state remains in browser memory.
 
 ## Current limitations
 
@@ -523,6 +537,7 @@ Each phase should preserve the low-friction applicant journey and be evaluated b
 - [`CLAUDE.md`](CLAUDE.md) — product invariants, code map and AI-contributor instructions.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, change workflow, testing and review checklist.
 - [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) — concise technical and product handover state.
+- [`docs/RAILWAY_DEPLOYMENT.md`](docs/RAILWAY_DEPLOYMENT.md) — protected Railway setup and verification.
 - [`docs/REVIEW_FIXES.md`](docs/REVIEW_FIXES.md) — verified integrity, security and dependency fixes retained as the technical review record.
 - [`docs/BUTTON_AUDIT.md`](docs/BUTTON_AUDIT.md) — current interaction audit and button behaviour.
 - [`tests/README.md`](tests/README.md) — regression-suite scope and commands.

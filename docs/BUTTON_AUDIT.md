@@ -27,6 +27,6 @@ Branch: `feat/crb-six-step-design`. No merge or deployment.
 | Copy, candidate/feedback downloads, initial/final PDF | Clipboard reads and completed browser downloads; PDF preview content checked (OS print dialog not automated) |
 | Application preview, approve, withdraw; company rubric and save rationale | Browser tests; private interviewer content excluded |
 
-48 backend/unit tests pass; 18 Chromium tests pass; TypeScript, production build and backend syntax pass.
+53 backend/unit tests pass; 18 Chromium tests pass; TypeScript, production build and backend syntax pass.
 
 The native demo intentionally hides the original numerical skill-score panels. Their legacy generation controls are covered on `/interview` by existing tests. Browser recording checks do not verify physical hardware, real speech recognition accuracy, or OS print-dialog behavior. The audit does not establish that all possible job sites, files or future model responses will succeed. Original user inputs remain reviewable.

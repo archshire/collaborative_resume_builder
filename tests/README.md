@@ -10,12 +10,13 @@ npm run test:browser
 npm audit
 ```
 
-`npm run check` runs 48 Node tests, TypeScript checking, the Vite production build, and the backend syntax check. Tests start a temporary loopback HTTP server; restricted environments need permission for local listening. No real provider keys or paid AI calls are required. Provider responses are mocked.
+`npm run check` runs 53 Node tests, TypeScript checking, the Vite production build, and the backend syntax check. Tests start a temporary loopback HTTP server; restricted environments need permission for local listening. No real provider keys or paid AI calls are required. Provider responses are mocked.
 
 - `transcription.test.ts`: incremental saves, partial failure/retry, malformed success responses, failed editor commits.
 - `evidence.test.cjs`: explicit/unknown roles, multiline turns, direct information, nontechnical examples, transcript/draft separation, formatting without speaker guesses.
 - `validation.test.cjs`: nested payload types, bounds, scores, source quotes, job extraction and question contracts.
 - `security.test.cjs`: local access, IPv4/IPv6, DNS pinning, redirects, URL encodings, response limits.
+- `hosting.test.cjs`: secure demo-session cookies, password-free local mode and fixed-window rate limiting.
 - `backend.test.cjs`: HTTP routing, request rejection, evidence gate, provider fallback, direct-info-only usage, invalid provider output.
 - `demo-access.test.ts`: demo credentials, approved snapshot whitelisting, and explicit applicant speaker filtering.
 - `opportunity.test.cjs`: requirement types, interpretation labels and exact source quotes.

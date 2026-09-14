@@ -46,6 +46,15 @@ test('API rejects cross-origin calls before invoking a provider', async t => {
   assert.equal(requests.length, 0);
 });
 
+test('health and local demo-session endpoints are available without provider calls', async () => {
+  const health = await fetch(base + '/health');
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { status: 'ok' });
+  const session = await fetch(base + '/api/demo-session');
+  assert.equal(session.status, 200);
+  assert.deepEqual(await session.json(), { required: false, authenticated: true });
+});
+
 test('invalid and oversized request bodies get client errors', async () => {
   assert.equal((await post('/api/generate-artifacts', null)).status, 400);
   assert.equal((await post('/api/generate-artifacts', { transcript: {} })).status, 400);
