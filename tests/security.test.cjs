@@ -20,6 +20,12 @@ test('backend accepts the local app and rejects hostile Hosts, origins and simpl
   }
   assert.equal(checkLocalRequest(local({ 'content-type': 'text/plain' })), 415);
   assert.equal(checkLocalRequest(local({ origin: undefined })), 0); // trusted local CLI
+  assert.equal(checkLocalRequest({ method: 'GET', socket: { localPort: 4173 }, headers: {
+    host: 'localhost:4173', 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document',
+  }}), 0);
+  assert.equal(checkLocalRequest({ method: 'GET', socket: { localPort: 4173 }, headers: {
+    host: 'localhost:4173', 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty',
+  }}), 403);
 });
 
 test('hosted mode accepts only the exact configured HTTPS origin', () => {

@@ -19,7 +19,11 @@ function checkLocalRequest(req, { publicOrigin = '' } = {}) {
   const expectedOrigin = configuredOrigin && host === new URL(configuredOrigin).host ? configuredOrigin : `http://${host}`;
   if (req.headers.origin && req.headers.origin !== expectedOrigin) return 403;
   if (configuredOrigin && host === new URL(configuredOrigin).host && req.method === 'POST' && !req.headers.origin) return 403;
-  if (req.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(req.headers['sec-fetch-site'])) return 403;
+  if (req.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(req.headers['sec-fetch-site'])) {
+    const isTopLevelNavigation = ['GET', 'HEAD'].includes(req.method) &&
+      req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document';
+    if (!isTopLevelNavigation) return 403;
+  }
   if (req.method === 'POST') {
     if (req.headers['x-resume-client'] !== '1') return 403;
     if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) return 415;
