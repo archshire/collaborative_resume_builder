@@ -20,15 +20,35 @@ Never commit `.env`. Railway variables belong in the Railway dashboard.
 2. Choose **New → GitHub Repository** in the project canvas.
 3. Connect `archshire/collaborative_resume_builder`.
 4. Select `feat/crb-applicant-company-demo` as the deployment branch during review.
-5. Confirm that Railway detects [`railway.toml`](../railway.toml).
+5. Confirm the build and start commands below.
 
-| Setting | Value |
-| --- | --- |
-| Builder | Railpack |
-| Build | `npm run build` |
-| Start | `npm run serve` |
-| Health check | `/health` |
-| Restart policy | On failure |
+| Setting | Value | Source |
+| --- | --- | --- |
+| Builder | Railpack | Railpack auto-detection |
+| Build | `npm run build` | `package.json` |
+| Start | `npm run serve` | [`railpack.json`](../railpack.json) and the `start` script |
+| Health check | `/health` | Service settings only |
+| Restart policy | On failure | Service settings only |
+
+### Why the start command lives in `railpack.json`
+
+Railpack detects `vite build` in the build script and will otherwise deploy CRB as a **static
+site**, serving `dist/` with no Node process. Every `/api/*` path then returns the SPA page, all AI
+features stop working, and the outer password gate has no server to enforce it.
+
+Two repository-level settings prevent that, and neither needs dashboard access:
+
+- [`railpack.json`](../railpack.json) sets `deploy.startCommand`.
+- `package.json` defines a `start` script; an explicit start script suppresses Railpack's
+  single-page-application mode.
+
+[`railway.toml`](../railway.toml) is **not** read unless the service has a Config-as-code file path
+set. Railway deprecated Config as Code, and services that never used it can no longer opt in, so
+treat `railway.toml` as a record of intent rather than applied configuration. Health check and
+restart policy can only be set in the service settings.
+
+If a deployment ever serves the built files without the backend, the application refuses to open
+and shows "Demonstration unavailable" rather than exposing the demo without a password.
 
 ## Add variables
 

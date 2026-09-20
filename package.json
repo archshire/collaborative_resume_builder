@@ -8,6 +8,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "start": "node server/index.cjs",
     "serve": "node server/index.cjs",
     "test": "node --test tests/*.test.*",
     "check": "npm test && npm run build && node --check server/index.cjs",
