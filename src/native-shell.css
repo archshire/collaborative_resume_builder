@@ -163,3 +163,16 @@
 .crb-sidebar nav button[aria-current=page] .crb-step-label small{color:#594817}
 .crb-sidebar nav button .crb-step-label small{color:#d6e5f5}
 @media(max-width:650px){.crb-logo-mark{width:40px;height:40px;flex-basis:40px}.crb-logo-copy strong{font-size:24px}.crb-logo-copy small{font-size:9px}}
+
+/* Guided interview: spoken questions with a voice or typed answer. */
+.crb-guided{border:2px solid #116a63;border-radius:10px;padding:18px;background:#f2fbf9;margin:20px 0}
+.crb-guided h3{margin:0 0 8px}
+.crb-guided .crb-guided-progress{margin:0 0 10px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#116a63}
+.crb-guided-question{margin:0 0 16px;padding:16px 18px;border-left:5px solid #116a63;border-radius:0 8px 8px 0;background:#fff;font-size:18px;font-weight:700;line-height:1.45}
+.crb-guided-question:focus-visible{outline:3px solid #0b3d5c;outline-offset:2px}
+.crb-guided-question:empty{display:none}
+.crb-guided-controls{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+.crb-guided label{display:block;font-weight:700;font-size:13px;margin:14px 0 8px}
+.crb-guided textarea{width:100%;border:2px solid #334155;border-radius:8px;padding:12px;resize:vertical;background:#fff}
+.crb-guided-live{border-top:1px solid #bfe0da;margin-top:16px;padding-top:16px}
+@media(max-width:650px){.crb-guided{padding:14px}.crb-guided-question{font-size:16px;padding:12px 14px}.crb-guided-controls button{width:100%}}

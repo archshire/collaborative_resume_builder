@@ -7,6 +7,7 @@ const path = require('path');
 const { URL } = require('url');
 const { checkLocalRequest, resolvePublicUrl } = require('./security.cjs');
 const { createDemoAccess, createFixedWindowLimiter } = require('./hosting.cjs');
+const { speechInput, MAX_SPEECH_BYTES } = require('./speech.cjs');
 const { analyzeCandidateEvidence } = require('./evidence.cjs');
 const { validateReflection, reflectionPrompt } = require('./reflection.cjs');
 const { validateOpportunity, opportunityPrompt } = require('./opportunity.cjs');
@@ -26,7 +27,8 @@ const aiLimit = Math.max(1, Number(process.env.AI_RATE_LIMIT || 30));
 const consumeAiRequest = createFixedWindowLimiter({ limit: aiLimit });
 const consumeLoginAttempt = createFixedWindowLimiter({ limit: 10, windowMs: 15 * 60 * 1000 });
 const paidRoutes = new Set(['/api/understand-opportunity', '/api/import-resume', '/api/reflect-answer', '/api/transcribe',
-  '/api/generate-artifacts', '/api/extract-job-url', '/api/extract-job-document', '/api/generate-interview-questions']);
+  '/api/generate-artifacts', '/api/extract-job-url', '/api/extract-job-document', '/api/generate-interview-questions',
+  '/api/speak-question']);
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -77,6 +79,11 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/transcribe') {
       await handleTranscribe(req, res);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/speak-question') {
+      await handleSpeakQuestion(req, res);
       return;
     }
 
@@ -196,6 +203,34 @@ async function handleReflectAnswer(req, res) {
     } catch { /* Keep the original answer usable if a provider fails or returns unsupported excerpts. */ }
   }
   sendJson(res, 503, { error: 'AI organisation is unavailable. Your original answer is still available for review.' });
+}
+
+async function handleSpeakQuestion(req, res) {
+  let input;
+  try { input = speechInput(await readJsonBody(req)); }
+  catch (error) { sendJson(res, error.statusCode || 400, { error: error.message }); return; }
+
+  // The browser voice is a working fallback, so a missing key is a degraded mode rather than a failure.
+  if (!process.env.OPENAI_API_KEY) {
+    sendJson(res, 503, { error: 'Spoken questions need an OpenAI key.', fallback: 'browser' });
+    return;
+  }
+
+  try {
+    const audio = await postOpenAiBinary(process.env.OPENAI_API_KEY, '/v1/audio/speech', {
+      model: process.env.OPENAI_SPEECH_MODEL || 'gpt-4o-mini-tts',
+      voice: input.voice,
+      input: input.text,
+      response_format: 'mp3',
+    }, MAX_SPEECH_BYTES);
+    sendJson(res, 200, { audio: audio.toString('base64'), mimeType: 'audio/mpeg', provider: 'openai' });
+  } catch (error) {
+    sendJson(res, 502, {
+      error: 'Spoken question generation failed.',
+      fallback: 'browser',
+      details: [String(error.message || error)],
+    });
+  }
 }
 
 async function handleTranscribe(req, res) {
@@ -1268,6 +1303,62 @@ function postOpenAiJson(apiKey, pathname, payload) {
       (res) => collectJsonResponse(res, 'OpenAI', resolve, reject),
     );
 
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+function postOpenAiBinary(apiKey, pathname, payload, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(payload);
+    const req = https.request(
+      {
+        hostname: 'api.openai.com',
+        path: pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(data),
+          Authorization: `Bearer ${apiKey}`,
+        },
+      },
+      (res) => {
+        const chunks = [];
+        let size = 0;
+        let failed = false;
+        res.on('data', (chunk) => {
+          if (failed) return;
+          size += chunk.length;
+          if (size > maxBytes) {
+            failed = true;
+            res.destroy();
+            reject(new Error('Speech response was larger than the allowed size.'));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.on('error', reject);
+        res.on('end', () => {
+          if (failed) return;
+          const body = Buffer.concat(chunks);
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            // A failed speech request returns JSON, not audio.
+            let message = `OpenAI speech request failed with status ${res.statusCode}.`;
+            try {
+              const parsed = JSON.parse(body.toString('utf8'));
+              if (parsed && parsed.error && parsed.error.message) message = `OpenAI: ${parsed.error.message}`;
+            } catch { /* Keep the status-code message when the error body is not JSON. */ }
+            reject(new Error(message));
+            return;
+          }
+          resolve(body);
+        });
+      },
+    );
+
+    const deadline = setTimeout(() => req.destroy(new Error('Speech request timed out.')), 20000);
+    req.on('close', () => clearTimeout(deadline));
     req.on('error', reject);
     req.write(data);
     req.end();

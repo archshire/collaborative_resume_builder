@@ -52,3 +52,18 @@ test('formatting preserves uncertainty and never infers roles from punctuation',
   assert.equal(format('Speaker 2: I built a database.', 'Alex'), 'Speaker 2: I built a database.');
   assert.equal(format('Applicant: Why do you ask?\nRecruiter: I was curious.', 'Alex'), 'Alex: Why do you ask?\n\nInterviewer: I was curious.');
 });
+
+test('a spoken guided question stays context and only the applicant answer becomes evidence', () => {
+  const transcript = [
+    'Question: Describe a workshop you designed and facilitated.',
+    'Applicant: I designed a six-session programme and facilitated it for 32 managers.',
+  ].join('\n');
+  const result = analyze(transcript, 'Daniel');
+  assert.equal(result.sufficient, true);
+  assert.ok(result.text.includes('I designed a six-session programme'));
+  // The question was read aloud by the app. It is never treated as something the applicant claimed.
+  assert.ok(!result.text.includes('Describe a workshop'));
+  assert.ok(!result.quotes.some(quote => quote.includes('Describe a workshop')));
+  // A skipped question leaves no answer behind and cannot carry the interview on its own.
+  assert.equal(analyze('Question: Describe a workshop you designed and facilitated.', 'Daniel').sufficient, false);
+});

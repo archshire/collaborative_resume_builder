@@ -71,6 +71,7 @@ CRB does not make hiring decisions. Evidence coverage describes the material sup
 | Opportunity-specific questions | Working |
 | Typed self-assessment | Working |
 | Browser recording, upload and transcription | Working |
+| Spoken questions with voice or typed answers (guided interview) | Working with a configured provider; free browser voice fallback |
 | Incremental transcription recovery and retry | Working |
 | Initial and updated resumes/candidate profiles | Working |
 | Colour-coded evidence coverage | Working in completed demos |
@@ -158,6 +159,21 @@ The applicant can paste a public job URL, upload a job document, or paste a desc
 The applicant generates or edits approximately eight questions. A short typed answer can be added directly to the transcript. An optional AI reflection identifies situation, action and outcome excerpts while keeping the original answer unchanged. The interface encourages one useful example at a time rather than requiring a long questionnaire.
 
 #### 3. Part 1 Interview
+
+**Guided interview** reads the generated questions aloud one at a time and keeps a visible
+`Question n of N` position. The applicant answers by recording a reply or by typing one. A recorded
+reply is transcribed into an editable box and is added to the transcript only after the applicant
+saves it; the applicant can replay a question, skip it or end the guided run at any point. A skipped
+question stays unanswered rather than being filled in on the applicant's behalf.
+
+Each saved exchange is written as a `Question:` context line followed by the applicant's own
+`Applicant:` turn. Evidence analysis accepts applicant turns only, so a spoken question is never
+treated as something the applicant claimed.
+
+Speech uses the configured OpenAI voice through the backend. When no key is configured, the request
+fails or the rate limit is reached, CRB falls back to the browser's own speech synthesis, and then to
+the on-screen question text. The applicant can always continue with text or use the free-form audio
+recorder below.
 
 The applicant can continue with text or use audio. The browser can test the microphone, record, upload audio and request transcription. Speaker labels remain editable; uncertain speakers are not automatically assigned to the applicant.
 
@@ -272,6 +288,7 @@ The frontend uses Vite, TypeScript and browser-native APIs without a UI framewor
 | `src/demo-access.ts` | Demo login and approved-material helpers. |
 | `src/resume-import.ts` | Resume upload and reviewed field filling. |
 | `src/transcription.ts` | Incremental transcription batch and retry logic. |
+| `src/guided-interview.ts` | Spoken questions, per-question recording and confirmed answers. |
 | `src/native-shell.css` | CRB, evidence-chart and company-board styles. |
 | `src/styles.css` | Interview and generated-document styles. |
 
@@ -295,6 +312,7 @@ Supporting modules separate URL security, runtime validation, opportunity extrac
 | `POST /api/reflect-answer` | Selects supported excerpts from an answer. |
 | `POST /api/import-resume` | Produces reviewable field suggestions from PDF, DOCX or text. |
 | `POST /api/transcribe` | Transcribes one audio segment. |
+| `POST /api/speak-question` | Returns spoken audio for one interview question. |
 | `POST /api/generate-artifacts` | Generates resume, profile and feedback artifacts by mode. |
 
 Keys remain in the server process. Resume import requests OpenAI response storage to be disabled.
@@ -444,6 +462,7 @@ collaborative_resume_builder/
 │   ├── applicant-demo.ts       # Fictional applicant fixture
 │   ├── company-demo.ts         # Fictional company fixtures
 │   ├── demo-access.ts          # Demo access and sharing helpers
+│   ├── guided-interview.ts     # Spoken questions and per-question answers
 │   ├── resume-import.ts        # Resume import UI
 │   ├── transcription.ts        # Incremental transcription logic
 │   ├── hosting.css              # Private hosted-demo access screen
@@ -467,7 +486,7 @@ AI_RATE_LIMIT=30
 PORT=4173
 ```
 
-Optional variables include `OPENAI_TEXT_MODEL` and `OPENAI_TRANSCRIBE_MODEL`. Some endpoints retain optional Gemini paths in code, while the current example configuration uses OpenAI.
+Optional variables include `OPENAI_TEXT_MODEL`, `OPENAI_TRANSCRIBE_MODEL` and `OPENAI_SPEECH_MODEL`. Some endpoints retain optional Gemini paths in code, while the current example configuration uses OpenAI.
 
 Never commit `.env` or expose API keys in browser code, screenshots, logs or issues.
 
@@ -489,7 +508,7 @@ When using `npm run serve`, rebuild after frontend changes before reviewing the 
 
 ## Testing
 
-Coverage includes incremental transcription recovery, asynchronous edit preservation, applicant-evidence isolation, uncertain speakers, nested response validation, URL/DNS security, source-grounded opportunity analysis, resume import review, six-stage navigation, one-click applicant and company demos, company assessment notes, recording controls, provider failures and narrow-screen layouts.
+Coverage includes spoken-question input validation, guided question parsing and speaker-label handling, the guided answer loop and its transcription failure path, incremental transcription recovery, asynchronous edit preservation, applicant-evidence isolation, uncertain speakers, nested response validation, URL/DNS security, source-grounded opportunity analysis, resume import review, six-stage navigation, one-click applicant and company demos, company assessment notes, recording controls, provider failures and narrow-screen layouts.
 
 Browser tests use controlled provider responses and synthetic microphone input. They do not validate a physical microphone, a live changing provider, a changing job site, or the print dialog.
 

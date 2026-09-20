@@ -96,6 +96,15 @@ recorderPanel.prepend(interviewGuide);
 const syncQuestionReference = () => { element('interview-question-reference').textContent = element<HTMLTextAreaElement>('custom-questions').value.trim() || 'Generate or add questions under Self-assessment. You can also begin with your own questions.'; };
 element('custom-questions').addEventListener('input', syncQuestionReference);
 document.addEventListener('crb:questions-changed', syncQuestionReference); syncQuestionReference();
+// Spoken questions with voice or typed answers. The recorder below stays available for a free-form interview.
+const { mountGuidedInterview } = await import('./guided-interview');
+const guidedHost = document.createElement('div');
+interviewGuide.after(guidedHost);
+mountGuidedInterview(guidedHost, {
+  questions: () => element<HTMLTextAreaElement>('custom-questions').value,
+  applicantName: () => element<HTMLInputElement>('applicant-name').value.trim() || 'Applicant',
+  onAnswer: (question, answer) => original.addGuidedExchange(question, answer),
+});
 
 const nodes: Record<string, HTMLElement[]> = { opportunity: [context], applicant: [applicantPanel], assessment: [assessmentPanel], interview: [part1, initialWorkspace], outputs: [outputs], followup: [part2, feedbackPanel, followupWorkspace], sharing: [finalStage] };
 const tabsFor = () => role === 'applicant' ? [['opportunity', '01', 'Job Opportunity'], ['assessment', '02', 'Self-assessment'], ['interview', '03', 'Part 1 Interview'], ['outputs', '04', 'Generate Initial Profile'], ['followup', '05', 'Part 2 – Feedback and Follow-up'], ['sharing', '06', 'Full Resume']] : [['opportunity', '01', 'Role & requirements'], ['evaluation', '02', 'Review application']];

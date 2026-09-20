@@ -3213,6 +3213,14 @@ export function addApplicantAnswer(text: string): void {
   if (!text.trim()) return;
   setTranscriptValue([transcript.value.trim(), `Applicant: ${text.trim()}`].filter(Boolean).join('\n\n'));
 }
+// The question is kept as context. Evidence analysis accepts Applicant: turns only, so the
+// question text is visible in the transcript without ever counting as applicant evidence.
+export function addGuidedExchange(question: string, answer: string): void {
+  if (!answer.trim()) return;
+  const entry = [question.trim() ? `Question: ${question.trim()}` : '', `Applicant: ${answer.trim()}`]
+    .filter(Boolean).join('\n');
+  setTranscriptValue([transcript.value.trim(), entry].filter(Boolean).join('\n\n'));
+}
 export type CompletedApplicantDemo = {
   sourceUrl: string;
   company: string;
