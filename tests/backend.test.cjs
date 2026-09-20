@@ -181,3 +181,21 @@ test('bad resume files are rejected without contacting providers', async t => {
   assert.equal((await post('/api/import-resume',{name:'fake.pdf',data:'YQ=='})).status,400);
   assert.equal(requests.length,0);
 });
+
+test('a pasted key with surrounding whitespace cannot break the Authorization header', () => {
+  const { normalizeProviderEnv } = require('../server/index.cjs');
+  // A dashboard-injected value keeps the newline the user pasted; Node rejects it as a header.
+  const env = normalizeProviderEnv({
+    OPENAI_API_KEY: 'sk-test-key\n',
+    GEMINI_API_KEY: '  gem-key  ',
+    OPENAI_SPEECH_MODEL: 'gpt-4o-mini-tts\r\n',
+    DEMO_ACCESS_PASSWORD: ' kept as typed ',
+  });
+  assert.equal(env.OPENAI_API_KEY, 'sk-test-key');
+  assert.equal(env.GEMINI_API_KEY, 'gem-key');
+  assert.equal(env.OPENAI_SPEECH_MODEL, 'gpt-4o-mini-tts');
+  for (const value of Object.values(env)) assert.doesNotThrow(() => new Headers({ authorization: `Bearer ${value}` }));
+  // A password is a user secret, not a credential header: it is left exactly as configured.
+  assert.equal(env.DEMO_ACCESS_PASSWORD, ' kept as typed ');
+  assert.deepEqual(normalizeProviderEnv({}), {});
+});

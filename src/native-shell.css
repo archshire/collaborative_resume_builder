@@ -164,15 +164,51 @@
 .crb-sidebar nav button .crb-step-label small{color:#d6e5f5}
 @media(max-width:650px){.crb-logo-mark{width:40px;height:40px;flex-basis:40px}.crb-logo-copy strong{font-size:24px}.crb-logo-copy small{font-size:9px}}
 
-/* Guided interview: spoken questions with a voice or typed answer. */
+/* Guided interview: a hands-free spoken conversation. */
 .crb-guided{border:2px solid #116a63;border-radius:10px;padding:18px;background:#f2fbf9;margin:20px 0}
 .crb-guided h3{margin:0 0 8px}
-.crb-guided .crb-guided-progress{margin:0 0 10px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#116a63}
-.crb-guided-question{margin:0 0 16px;padding:16px 18px;border-left:5px solid #116a63;border-radius:0 8px 8px 0;background:#fff;font-size:18px;font-weight:700;line-height:1.45}
+.crb-guided-statusbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.crb-guided-phase{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#0b5f59;background:#d6f2ed;border-radius:999px;padding:5px 12px}
+.crb-guided-progress{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#4a5a6a}
+.crb-guided-question{margin:0 0 4px;padding:16px 18px;border-left:5px solid #116a63;border-radius:0 8px 8px 0;background:#fff;font-size:18px;font-weight:700;line-height:1.45}
 .crb-guided-question:focus-visible{outline:3px solid #0b3d5c;outline-offset:2px}
 .crb-guided-question:empty{display:none}
 .crb-guided-controls{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
 .crb-guided label{display:block;font-weight:700;font-size:13px;margin:14px 0 8px}
 .crb-guided textarea{width:100%;border:2px solid #334155;border-radius:8px;padding:12px;resize:vertical;background:#fff}
 .crb-guided-live{border-top:1px solid #bfe0da;margin-top:16px;padding-top:16px}
+.crb-guided-typed{border:1px dashed #7fb8b1;border-radius:8px;padding:0 14px 14px;margin-bottom:12px;background:#fbfffe}
+.crb-guided-log{margin-top:14px;max-height:280px;overflow-y:auto}
+.crb-guided-log:empty{display:none}
+.crb-guided-turn{margin:0 0 8px;padding:10px 12px;border-radius:8px;font-size:14px;line-height:1.5}
+.crb-guided-turn.is-crb{background:#e8f4f2;color:#123f3b}
+.crb-guided-turn.is-applicant{background:#fff;border:1px solid #d6dee6}
 @media(max-width:650px){.crb-guided{padding:14px}.crb-guided-question{font-size:16px;padding:12px 14px}.crb-guided-controls button{width:100%}}
+
+/* Talking orb: reflects the conversation phase, and pulses with the applicant's own voice
+   while listening. Decorative only — every phase is also announced as text. */
+.crb-orb-stage{display:flex;justify-content:center;padding:4px 0 18px}
+.crb-orb{position:relative;width:132px;height:132px;border-radius:50%;
+  background:conic-gradient(from 210deg,#4fb0ee,#7f93ee,#ef7ec8,#b98ff2,#57cfe0,#3f9fe8,#4fb0ee);
+  box-shadow:0 0 0 6px #ffffffd9,0 14px 34px #3f82cc47,inset 0 0 22px #ffffff4d;
+  transform:scale(var(--orb-scale,1));transition:transform .12s ease-out;
+  animation:crb-orb-spin 11s linear infinite}
+.crb-orb::before{content:'';position:absolute;inset:-22%;border-radius:50%;z-index:-1;
+  background:radial-gradient(circle,#93d3f5aa,#d9b8f04d 45%,transparent 70%);
+  filter:blur(14px);opacity:var(--orb-glow,.45);transition:opacity .12s ease-out}
+.crb-orb-core{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 34% 28%,#ffffffd9,#ffffff26 24%,transparent 46%),
+    radial-gradient(circle at 50% 50%,#ffffffa6,transparent 30%)}
+@keyframes crb-orb-spin{to{transform:rotate(360deg)}}
+@keyframes crb-orb-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes crb-orb-talk{0%,100%{transform:scale(1)}25%{transform:scale(1.09)}50%{transform:scale(1.02)}75%{transform:scale(1.12)}}
+/* The spin lives on the gradient layer; scale animations live on the wrapper so they compose. */
+.crb-orb[data-phase=speaking]{animation:crb-orb-spin 4.5s linear infinite,crb-orb-talk 1.1s ease-in-out infinite}
+.crb-orb[data-phase=thinking]{animation:crb-orb-spin 16s linear infinite,crb-orb-breathe 2.4s ease-in-out infinite;filter:saturate(.85)}
+.crb-orb[data-phase=listening]{animation:crb-orb-spin 8s linear infinite}
+.crb-orb[data-phase=idle]{animation:crb-orb-spin 18s linear infinite;filter:saturate(.8) opacity(.9)}
+@media(prefers-reduced-motion:reduce){
+  .crb-orb,.crb-orb[data-phase]{animation:none;transition:none}
+  .crb-orb[data-phase=listening]{box-shadow:0 0 0 7px #ffffffc4,0 0 0 calc(7px + var(--orb-scale,1) * 6px) #79c4f455,0 14px 34px #3f82cc3d}
+}
+@media(max-width:650px){.crb-orb{width:104px;height:104px}}

@@ -19,7 +19,8 @@ CRB currently runs as a local TypeScript/Vite frontend with a Node HTTP backend.
 - Editable AI opportunity analysis distinguishing stated requirements and interpretations.
 - Approximately eight generated questions.
 - Typed answers or browser audio recording/upload/transcription.
-- Guided interview: questions read aloud one at a time, answered by voice or by typing, with the transcription shown in an editable box before it is saved.
+- Guided interview: a hands-free spoken conversation. Questions are read aloud, answers end on ~2.5s of silence, and at most one grounded follow-up is asked per question. Typing, skipping and ending are always available.
+- An orb indicates speaking, listening and thinking phases; it is decorative, aria-hidden and still under reduced-motion.
 - Incremental transcription commit and retry after partial failure.
 - Spoken questions fall back from the OpenAI voice to the browser voice to on-screen text.
 - Initial and updated resume/candidate-profile generation.

@@ -18,6 +18,7 @@ const distDir = path.join(rootDir, 'dist');
 const maxBodyBytes = 28 * 1024 * 1024;
 
 loadEnv(path.join(rootDir, '.env'));
+normalizeProviderEnv(process.env);
 const port = Number(process.env.PORT || 4173);
 const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
 const listenHost = process.env.HOST || (isRailway ? '0.0.0.0' : '127.0.0.1');
@@ -1578,6 +1579,18 @@ function contentType(filePath) {
   return 'application/octet-stream';
 }
 
+// A hosting dashboard injects variables directly, bypassing loadEnv and its trimming. A key pasted
+// with a trailing newline reaches the Authorization header verbatim and Node then rejects every
+// provider request with "Invalid character in header content". Credentials never need surrounding
+// whitespace, so it is always safe to remove.
+function normalizeProviderEnv(env) {
+  for (const name of ['OPENAI_API_KEY', 'GEMINI_API_KEY', 'OPENAI_TEXT_MODEL', 'OPENAI_TRANSCRIBE_MODEL',
+    'OPENAI_SPEECH_MODEL', 'GEMINI_TEXT_MODEL']) {
+    if (typeof env[name] === 'string') env[name] = env[name].trim();
+  }
+  return env;
+}
+
 function loadEnv(filePath) {
   if (!fs.existsSync(filePath)) {
     return;
@@ -1603,4 +1616,4 @@ function loadEnv(filePath) {
   });
 }
 
-module.exports = { server, conservativeFormatTranscript, validateArtifacts, validateInterviewQuestions, validateJobExtraction, buildArtifactPrompt, fetchPageText };
+module.exports = { server, normalizeProviderEnv, conservativeFormatTranscript, validateArtifacts, validateInterviewQuestions, validateJobExtraction, buildArtifactPrompt, fetchPageText };

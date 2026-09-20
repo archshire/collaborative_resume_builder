@@ -71,7 +71,7 @@ CRB does not make hiring decisions. Evidence coverage describes the material sup
 | Opportunity-specific questions | Working |
 | Typed self-assessment | Working |
 | Browser recording, upload and transcription | Working |
-| Spoken questions with voice or typed answers (guided interview) | Working with a configured provider; free browser voice fallback |
+| Hands-free spoken interview with grounded follow-ups (guided interview) | Working with a configured provider; free browser voice fallback |
 | Incremental transcription recovery and retry | Working |
 | Initial and updated resumes/candidate profiles | Working |
 | Colour-coded evidence coverage | Working in completed demos |
@@ -160,20 +160,34 @@ The applicant generates or edits approximately eight questions. A short typed an
 
 #### 3. Part 1 Interview
 
-**Guided interview** reads the generated questions aloud one at a time and keeps a visible
-`Question n of N` position. The applicant answers by recording a reply or by typing one. A recorded
-reply is transcribed into an editable box and is added to the transcript only after the applicant
-saves it; the applicant can replay a question, skip it or end the guided run at any point. A skipped
-question stays unanswered rather than being filled in on the applicant's behalf.
+**Guided interview** turns the generated questions into a spoken conversation. CRB asks a question
+aloud, listens until the applicant stops speaking, transcribes the answer and continues on its own.
+Nothing has to be pressed between turns.
 
-Each saved exchange is written as a `Question:` context line followed by the applicant's own
-`Applicant:` turn. Evidence analysis accepts applicant turns only, so a spoken question is never
-treated as something the applicant claimed.
+- Turn-taking uses the microphone level: about 2.5 seconds of quiet ends an answer. The threshold is
+  calibrated against the room's own noise floor, so a quiet room and a busy one behave alike. A
+  question nobody answers is released after 12 seconds and stays unanswered.
+- After an answer, CRB asks the existing reflection endpoint whether one follow-up is worth asking.
+  Any follow-up comes from that endpoint's validated `followUpQuestion`, which is grounded in the
+  applicant's own sentences and never asserts a missing skill. At most one follow-up per question.
+- **Type this answer** switches any turn to typing, so a refused microphone, a noisy room or a
+  preference for text never blocks the conversation.
+- **Skip question** leaves a question unanswered rather than filling it in, and **End conversation**
+  stops speech and releases the microphone immediately.
+- An animated orb shows whether CRB is speaking, listening or thinking, pulsing with the applicant's
+  own voice while it listens. It is decorative and `aria-hidden`; every phase is also stated in text.
+  It holds still under `prefers-reduced-motion`.
+
+The microphone is opened only after a question has finished playing, so CRB's own voice is never
+recorded and transcribed as the applicant's answer.
+
+Each exchange is written to the editable transcript as a `Question:` context line followed by the
+applicant's `Applicant:` turn. Evidence analysis accepts applicant turns only, so a spoken question
+is never treated as something the applicant claimed.
 
 Speech uses the configured OpenAI voice through the backend. When no key is configured, the request
 fails or the rate limit is reached, CRB falls back to the browser's own speech synthesis, and then to
-the on-screen question text. The applicant can always continue with text or use the free-form audio
-recorder below.
+the on-screen question text.
 
 The applicant can continue with text or use audio. The browser can test the microphone, record, upload audio and request transcription. Speaker labels remain editable; uncertain speakers are not automatically assigned to the applicant.
 
